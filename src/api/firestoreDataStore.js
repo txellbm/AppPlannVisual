@@ -1,50 +1,52 @@
-// Esquelet per a una futura implementació amb Firestore.
-// Aquesta interfície ha de coincidir amb dataStore perquè la UI no canviï.
+
+import { firebaseClient } from './firebaseClient';
+
+const withReplaceAll = (collectionName) => ({
+  async filter({ year }) {
+    if (typeof year !== 'number') {
+      throw new Error('Cal un any per filtrar la col·lecció');
+    }
+    return firebaseClient.getCollection(collectionName, [{ field: 'year', operator: '==', value: year }]);
+  },
+
+  async replaceAll({ year, records = [] }) {
+    if (typeof year !== 'number') {
+      throw new Error('Cal un any per reemplaçar registres');
+    }
+    
+    await firebaseClient.deleteFilteredDocs(collectionName, [{ field: 'year', operator: '==', value: year }]);
+
+    if (records.length > 0) {
+        await firebaseClient.bulkCreate(collectionName, records);
+    }
+    
+    return records; 
+  },
+});
+
+const pendingEntity = {
+    async filter({ year }) {
+        return firebaseClient.getCollection('PendingDay', [{ field: 'year', operator: '==', value: year }]);
+    },
+
+    async replaceAll({ year, records = [] }) {
+        await firebaseClient.deleteFilteredDocs('PendingDay', [{ field: 'year', operator: '==', value: year }]);
+        if (records.length > 0) {
+            await firebaseClient.bulkCreate('PendingDay', records);
+        }
+        return records;
+    },
+
+    async append({ year, record }) {
+        const docId = await firebaseClient.addDocument('PendingDay', { ...record, year });
+        return { ...record, id: docId };
+    },
+};
+
 
 export const firestoreDataStore = {
-  CalendarDay: {
-    // Example: return query by year from Firestore collection "CalendarDay"
-    async filter(/* { year } */) {
-      // TODO: Implementar query a Firestore (where('year', '==', year))
-      return [];
-    },
-    async replaceAll(/* { year, records } */) {
-      // TODO: Esborrar documents existents del mateix any i fer batch write amb `records`
-      return [];
-    },
-  },
-  ManualFR: {
-    async filter(/* { year } */) {
-      // TODO: Consulta per any a la col·lecció ManualFR
-      return [];
-    },
-    async replaceAll(/* { year, records } */) {
-      // TODO: Escriure tots els documents del any (batch/set)
-      return [];
-    },
-  },
-  PendingDay: {
-    async filter(/* { year } */) {
-      // TODO: Consulta per any, ordenar per order_index si cal
-      return [];
-    },
-    async replaceAll(/* { year, records } */) {
-      // TODO: Esborrar i crear tots els pendents del any (batch)
-      return [];
-    },
-    async append(/* { year, record } */) {
-      // TODO: Afegir un nou pendent amb add/set
-      return null;
-    },
-  },
-  CourseHours: {
-    async filter(/* { year } */) {
-      // TODO: Consulta per any, ordenar per order_index si cal
-      return [];
-    },
-    async replaceAll(/* { year, records } */) {
-      // TODO: Esborrar i recrear tots els documents del any
-      return [];
-    },
-  },
+  CalendarDay: withReplaceAll('CalendarDay'),
+  ManualFR: withReplaceAll('ManualFR'),
+  PendingDay: pendingEntity,
+  CourseHours: withReplaceAll('CourseHours'),
 };

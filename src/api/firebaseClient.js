@@ -1,85 +1,76 @@
+
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, getDoc, doc, addDoc, updateDoc, deleteDoc, query, where, writeBatch } from "firebase/firestore";
 
-// TODO: Replace with your app's Firebase project configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBmRN67ntRZuYvuBEX3y1BXuNgC9_C1qkY",
+  authDomain: "plann-visual-web.firebaseapp.com",
+  projectId: "plann-visual-web",
+  storageBucket: "plann-visual-web.appspot.com",
+  messagingSenderId: "696666638120",
+  appId: "1:696666638120:web:b73fa3e1dc2d63c640f21d",
+  measurementId: "G-C8LLYW4C5F"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Initialize Cloud Firestore and get a reference to the service
 const db = getFirestore(app);
 
-const getCollection = async (collectionName, filters = []) => {
-  const collRef = collection(db, collectionName);
-  const q = filters.length > 0 ? query(collRef, ...filters.map(f => where(f.field, f.operator, f.value))) : collRef;
-  const querySnapshot = await getDocs(q);
-  const collectionData = [];
-  querySnapshot.forEach((doc) => {
-    collectionData.push({ id: doc.id, ...doc.data() });
-  });
-  return collectionData;
-};
+async function getCollection(collectionName, filters = []) {
+  let q = collection(db, collectionName);
+  if (filters.length > 0) {
+    const whereClauses = filters.map(f => where(f.field, f.operator, f.value));
+    q = query(q, ...whereClauses);
+  }
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
 
-const getDocument = async (collectionName, id) => {
+async function getDocument(collectionName, id) {
   const docRef = doc(db, collectionName, id);
   const docSnap = await getDoc(docRef);
+  return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+}
 
-  if (docSnap.exists()) {
-    return { id: docSnap.id, ...docSnap.data() };
-  } else {
-    console.log("No such document!");
-    return null;
-  }
-};
+async function addDocument(collectionName, data) {
+  const docRef = await addDoc(collection(db, collectionName), data);
+  return docRef.id;
+}
 
-const addDocument = async (collectionName, data) => {
-  try {
-    const docRef = await addDoc(collection(db, collectionName), data);
-    return { id: docRef.id, ...data };
-  } catch (e) {
-    console.error("Error adding document: ", e);
-    return null;
-  }
-};
-
-const updateDocument = async (collectionName, id, data) => {
+async function updateDocument(collectionName, id, data) {
   const docRef = doc(db, collectionName, id);
   await updateDoc(docRef, data);
-};
+}
 
-const deleteDocument = async (collectionName, id) => {
+async function deleteDocument(collectionName, id) {
   await deleteDoc(doc(db, collectionName, id));
-};
+}
 
-const bulkCreate = async (collectionName, records) => {
-    if (!records || records.length === 0) return;
-    const batch = writeBatch(db);
-    records.forEach((record) => {
-        const docRef = doc(collection(db, collectionName)); // Creates a new doc with a random ID
-        batch.set(docRef, record);
-    });
-    await batch.commit();
-};
+async function bulkCreate(collectionName, records) {
+  if (!records || records.length === 0) return;
+  const batch = writeBatch(db);
+  const collectionRef = collection(db, collectionName);
+  records.forEach(record => {
+    const docRef = doc(collectionRef);
+    batch.set(docRef, record);
+  });
+  await batch.commit();
+}
 
-const deleteFilteredDocs = async (collectionName, filters = []) => {
+async function deleteFilteredDocs(collectionName, filters = []) {
+    if (filters.length === 0) {
+        console.warn(`Esborrat de col·lecció sencera ${collectionName} previngut. Cal un filtre.`);
+        return;
+    }
     const docsToDelete = await getCollection(collectionName, filters);
     if (docsToDelete.length === 0) return;
 
     const batch = writeBatch(db);
-    docsToDelete.forEach(record => {
-        batch.delete(doc(db, collectionName, record.id));
+    docsToDelete.forEach(d => {
+        const docRef = doc(db, collectionName, d.id);
+        batch.delete(docRef);
     });
     await batch.commit();
 }
-
 
 export const firebaseClient = {
   getCollection,

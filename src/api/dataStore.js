@@ -1,4 +1,8 @@
+
 import { base44 } from './base44Client';
+import { firestoreDataStore } from './firestoreDataStore';
+
+const USE_FIRESTORE = process.env.VITE_USE_FIRESTORE === 'true';
 
 // Helper to keep backup storage within the data layer (never in UI)
 const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -123,32 +127,17 @@ const pendingEntity = {
   },
 };
 
-export const dataStore = {
-  /**
-   * CalendarDay: principal col·lecció per als dies del calendari.
-   * Pensat per Firestore: filter({ year }) i replaceAll({ year, records })
-   * on `records` és un array de documents amb { year, date_key, day_type, ... }.
-   */
+
+const localDataStore = {
   CalendarDay: withReplaceAll('CalendarDay'),
-
-  /**
-   * ManualFR: festius recuperables manuals per any. Interfície idèntica a la prevista a Firestore.
-   */
   ManualFR: withReplaceAll('ManualFR'),
-
-  /**
-   * PendingDay: dies pendents; permet afegir elements incrementalment (append) o substituir el conjunt.
-   */
   PendingDay: pendingEntity,
-
-  /**
-   * CourseHours: hores de cursos; substitució completa per any.
-   */
   CourseHours: withReplaceAll('CourseHours'),
+};
 
-  // Conversió auxiliar per al calendari (només usada internament o en adaptacions futures)
-  _calendar: {
+export const dataStore = USE_FIRESTORE ? firestoreDataStore : localDataStore;
+
+dataStore._calendar = {
     toRecords: calendarToRecords,
     fromRecords: calendarFromRecords,
-  },
 };
