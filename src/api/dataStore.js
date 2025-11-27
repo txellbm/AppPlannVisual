@@ -2,7 +2,7 @@
 import { base44 } from './base44Client';
 import { firestoreDataStore } from './firestoreDataStore';
 
-const USE_FIRESTORE = process.env.VITE_USE_FIRESTORE === 'true';
+const USE_FIRESTORE = import.meta.env.VITE_USE_FIRESTORE === 'true';
 
 // Helper to keep backup storage within the data layer (never in UI)
 const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
