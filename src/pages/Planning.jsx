@@ -136,6 +136,12 @@ function generateWorkPattern(year) {
     while (currentFriday <= monthEnd && currentFriday <= endDate) {
       const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
 
+
+    // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
+    let cycleIndex = 0;
+    while (currentFriday <= monthEnd && currentFriday <= endDate) {
+      const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
+
       workOffsets.forEach((offset) => {
         const workDate = new Date(currentFriday);
         workDate.setDate(workDate.getDate() + offset);
