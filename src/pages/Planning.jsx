@@ -89,6 +89,8 @@ const DAY_INFO = {
   CH: { deadline: 'Assignats pel planificador', period: 'Dins del mateix any (no transferibles)' }
 };
 
+const { CalendarDay, ManualFR, PendingDay, CourseHours, _calendar: calendarHelpers } = dataStore;
+
 // ===== FUNCIONS =====
 
 function getDaysInMonth(year, month) {
@@ -270,45 +272,16 @@ export default function Planning() {
     const loadData = async () => {
       try {
         // Carregar dies del calendari
-        const calendarDays = await dataStore.CalendarDay.filter({ year });
-        
+        const calendarDays = await CalendarDay.filter({ year });
+
         if (calendarDays.length > 0) {
           // Hi ha dades al núvol - carregar-les
-          const calendarObj = {};
-          calendarDays.forEach(day => {
-            calendarObj[day.date_key] = {
-              date: day.date_key,
-              day_type: day.day_type,
-              slotIndex: day.slot_index,
-              frId: day.fr_id,
-              fromPreviousYear: day.from_previous_year,
-              pendingIndex: day.pending_index,
-              pendingLabel: day.pending_label,
-              contractExpansion: day.contract_expansion,
-              originallyWorked: day.originally_worked
-            };
-          });
+          const calendarObj = calendarHelpers.fromRecords(calendarDays);
           setCalendar(calendarObj);
           setHistory([calendarObj]);
           setHistoryIndex(0);
           console.log(`☁️ Calendari ${year} carregat del núvol (${calendarDays.length} dies)`);
         } else {
-          // No hi ha dades al núvol - intentar backup local
-          const backup = localStorage.getItem(`calendar-backup-${year}`);
-          if (backup) {
-            try {
-              const parsed = JSON.parse(backup);
-              if (Object.keys(parsed).length > 0) {
-                setCalendar(parsed);
-                setHistory([parsed]);
-                setHistoryIndex(0);
-                console.log(`📦 Calendari ${year} recuperat del backup local`);
-                return; // Important: no continuar
-              }
-            } catch (e) {
-              console.warn('Error parsing backup:', e);
-            }
-          }
           // Només generar patró si no hi ha res
           const pattern = generateWorkPattern(year);
           setCalendar(pattern);
@@ -318,7 +291,7 @@ export default function Planning() {
         }
 
         // Carregar FR manuals
-        const frRecords = await dataStore.ManualFR.filter({ year });
+        const frRecords = await ManualFR.filter({ year });
         if (frRecords.length > 0) {
           setManualFR(frRecords.map(fr => ({ label: fr.label, date: fr.date || '' })));
         } else {
@@ -329,7 +302,7 @@ export default function Planning() {
         }
 
         // Carregar dies pendents
-        const pendingRecords = await dataStore.PendingDay.filter({ year });
+        const pendingRecords = await PendingDay.filter({ year });
         pendingRecords.sort((a, b) => a.order_index - b.order_index);
         
         if (pendingRecords.length === 0 && year === 2026) {
@@ -346,7 +319,7 @@ export default function Planning() {
         }
 
         // Carregar hores de cursos
-        const courseRecords = await dataStore.CourseHours.filter({ year });
+        const courseRecords = await CourseHours.filter({ year });
         courseRecords.sort((a, b) => a.order_index - b.order_index);
         setCourseHours(courseRecords.map(c => ({
           name: c.name || '',
@@ -368,50 +341,17 @@ export default function Planning() {
 
   const saveCalendar = async (newCalendar) => {
     setCalendar(newCalendar);
-    
+
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newCalendar);
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
 
-    // Backup local
-    try {
-      localStorage.setItem(`calendar-backup-${year}`, JSON.stringify(newCalendar));
-    } catch (e) {
-      console.warn('Error guardant backup local:', e);
-    }
-
     try {
       // Crear nous registres (només camps amb valor definit)
-      const records = Object.entries(newCalendar)
-        .filter(([_, entry]) => entry && entry.day_type)
-        .map(([dateKey, entry]) => {
-          const record = {
-            year,
-            date_key: dateKey,
-            day_type: entry.day_type,
-            from_previous_year: entry.fromPreviousYear === true,
-            contract_expansion: entry.contractExpansion === true,
-            originally_worked: entry.originallyWorked === true
-          };
+      const records = calendarHelpers.toRecords(newCalendar, year);
 
-          if (typeof entry.slotIndex === 'number' && entry.slotIndex >= 0) {
-            record.slot_index = entry.slotIndex;
-          }
-          if (typeof entry.frId === 'string' && entry.frId.length > 0) {
-            record.fr_id = entry.frId;
-          }
-          if (typeof entry.pendingIndex === 'number' && entry.pendingIndex >= 0) {
-            record.pending_index = entry.pendingIndex;
-          }
-          if (typeof entry.pendingLabel === 'string' && entry.pendingLabel.length > 0) {
-            record.pending_label = entry.pendingLabel;
-          }
-
-          return record;
-        });
-
-      await dataStore.CalendarDay.replaceAll({ year }, records);
+      await CalendarDay.replaceAll({ year }, records);
       console.log('✅ Calendari guardat al núvol');
     } catch (error) {
       console.error('Error guardant calendari:', error);
@@ -427,7 +367,7 @@ export default function Planning() {
         label: typeof fr.label === 'string' ? fr.label : 'FR Manual',
         date: typeof fr.date === 'string' ? fr.date : ''
       }));
-      await dataStore.ManualFR.replaceAll({ year }, records);
+      await ManualFR.replaceAll({ year }, records);
     } catch (error) {
       console.error('Error guardant FR manuals:', error);
       alert('⚠️ Error guardant FR manuals al núvol');
@@ -448,7 +388,7 @@ export default function Planning() {
           order_index: idx
         }));
 
-      await dataStore.PendingDay.replaceAll({ year }, records);
+      await PendingDay.replaceAll({ year }, records);
       console.log('✅ Dies pendents guardats');
     } catch (error) {
       console.error('Error guardant dies pendents:', error);
@@ -467,7 +407,7 @@ export default function Planning() {
         used: typeof c.used === 'number' ? c.used : 0,
         order_index: idx
       }));
-      await dataStore.CourseHours.replaceAll({ year }, records);
+      await CourseHours.replaceAll({ year }, records);
     } catch (error) {
       console.error('Error guardant hores de cursos:', error);
       alert('⚠️ Error guardant cursos al núvol');
@@ -490,36 +430,10 @@ export default function Planning() {
       setHistoryIndex(newIndex);
       const prevCalendar = history[newIndex];
       setCalendar(prevCalendar);
-      
+
       try {
-        const records = Object.entries(prevCalendar)
-          .filter(([_, entry]) => entry && entry.day_type)
-          .map(([dateKey, entry]) => {
-            const record = {
-              year,
-              date_key: dateKey,
-              day_type: entry.day_type,
-              from_previous_year: entry.fromPreviousYear === true,
-              contract_expansion: entry.contractExpansion === true,
-              originally_worked: entry.originallyWorked === true
-            };
-
-            if (typeof entry.slotIndex === 'number' && entry.slotIndex >= 0) {
-              record.slot_index = entry.slotIndex;
-            }
-            if (typeof entry.frId === 'string' && entry.frId.length > 0) {
-              record.fr_id = entry.frId;
-            }
-            if (typeof entry.pendingIndex === 'number' && entry.pendingIndex >= 0) {
-              record.pending_index = entry.pendingIndex;
-            }
-            if (typeof entry.pendingLabel === 'string' && entry.pendingLabel.length > 0) {
-              record.pending_label = entry.pendingLabel;
-            }
-
-            return record;
-          });
-        await dataStore.CalendarDay.replaceAll({ year }, records);
+        const records = calendarHelpers.toRecords(prevCalendar, year);
+        await CalendarDay.replaceAll({ year }, records);
       } catch (error) {
         console.error('Error en undo:', error);
       }
@@ -534,34 +448,8 @@ export default function Planning() {
         setCalendar(nextCalendar);
 
         try {
-          const records = Object.entries(nextCalendar)
-            .filter(([_, entry]) => entry && entry.day_type)
-            .map(([dateKey, entry]) => {
-              const record = {
-                year,
-              date_key: dateKey,
-              day_type: entry.day_type,
-              from_previous_year: entry.fromPreviousYear === true,
-              contract_expansion: entry.contractExpansion === true,
-              originally_worked: entry.originallyWorked === true
-            };
-
-            if (typeof entry.slotIndex === 'number' && entry.slotIndex >= 0) {
-              record.slot_index = entry.slotIndex;
-            }
-            if (typeof entry.frId === 'string' && entry.frId.length > 0) {
-              record.fr_id = entry.frId;
-            }
-            if (typeof entry.pendingIndex === 'number' && entry.pendingIndex >= 0) {
-              record.pending_index = entry.pendingIndex;
-            }
-            if (typeof entry.pendingLabel === 'string' && entry.pendingLabel.length > 0) {
-              record.pending_label = entry.pendingLabel;
-            }
-
-            return record;
-          });
-        await dataStore.CalendarDay.replaceAll({ year }, records);
+          const records = calendarHelpers.toRecords(nextCalendar, year);
+        await CalendarDay.replaceAll({ year }, records);
       } catch (error) {
         console.error('Error en redo:', error);
       }
@@ -750,14 +638,16 @@ export default function Planning() {
     
     try {
       const nextYear = year + 1;
-      const existingPending = await dataStore.PendingDay.filter({ year: nextYear });
+      const existingPending = await PendingDay.filter({ year: nextYear });
       const newOrderIndex = existingPending.length;
-      
-      await dataStore.PendingDay.create({
+
+      await PendingDay.append({
         year: nextYear,
-        type: typeLabel,
-        date: '',
-        order_index: newOrderIndex
+        record: {
+          type: typeLabel,
+          date: '',
+          order_index: newOrderIndex,
+        },
       });
       
       alert(`✅ ${code} marcat com a pendent per ${nextYear}`);
@@ -1113,10 +1003,10 @@ export default function Planning() {
               <button
                 onClick={async () => {
                   try {
-                    const calendarDays = await dataStore.CalendarDay.filter({ year });
-                    const frRecords = await dataStore.ManualFR.filter({ year });
-                    const pendingRecords = await dataStore.PendingDay.filter({ year });
-                    const courseRecords = await dataStore.CourseHours.filter({ year });
+                    const calendarDays = await CalendarDay.filter({ year });
+                    const frRecords = await ManualFR.filter({ year });
+                    const pendingRecords = await PendingDay.filter({ year });
+                    const courseRecords = await CourseHours.filter({ year });
                     
                     const backup = {
                       year,
@@ -1496,16 +1386,18 @@ export default function Planning() {
                                 e.stopPropagation();
                                 try {
                                   const nextYear = year + 1;
-                                  const existingPending = await dataStore.PendingDay.filter({ year: nextYear });
+                                  const existingPending = await PendingDay.filter({ year: nextYear });
                                   const newOrderIndex = existingPending.length;
-                                  
-                                  await dataStore.PendingDay.create({
+
+                                  await PendingDay.append({
                                     year: nextYear,
-                                    type: `FR ${fr.date}`,
-                                    date: '',
-                                    order_index: newOrderIndex
+                                    record: {
+                                      type: `FR ${fr.date}`,
+                                      date: '',
+                                      order_index: newOrderIndex,
+                                    }
                                   });
-                                  
+
                                   alert(`✅ FR ${fr.label} marcat com a pendent per ${nextYear}`);
                                 } catch (error) {
                                   console.error('Error:', error);
