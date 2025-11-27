@@ -436,7 +436,7 @@ README.md                # Aquest fitxer
 ✅ Gestió de vacances (VE, VS, VN, LD, VC, CH)
 ✅ Festius recuperables (FR)
 ✅ Dies pendents d'any anterior
-✅ Ampliació contracte 29h
+✅ Ampliació contracte (29h)
 ✅ Hores de cursos
 ✅ Undo/Redo (Ctrl+Z/Y)
 ✅ Generador de sol·licitud
@@ -555,7 +555,7 @@ tailwind.config.js       # Configuració Tailwind
 ✅ Gestió de vacances (VE, VS, VN, LD, VC, CH)
 ✅ Festius recuperables (FR)
 ✅ Dies pendents d'any anterior
-✅ Ampliació contracte 29h
+✅ Ampliació contracte (29h)
 ✅ Hores de cursos
 ✅ Undo/Redo (Ctrl+Z/Y)
 ✅ Generador de sol·licitud
@@ -815,7 +815,7 @@ npm start
 - ✅ Gestió de vacances (VE, VS, VN, LD, VC, CH)
 - ✅ Festius recuperables (FR)
 - ✅ Dies pendents d'any anterior
-- ✅ Ampliació contracte 29h
+- ✅ Ampliació contracte (29h)
 - ✅ Hores de cursos
 - ✅ Undo/Redo (Ctrl+Z/Y)
 - ✅ Generador de sol·licitud
@@ -1968,7 +1968,7 @@ ${frHolidays.map((h, i) => `${i + 1}. ${h.label} - ${h.date} (${h.period})`).joi
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs relative">M<span className="absolute top-0 left-0 text-[8px]">💼</span></div>
-                      <span className="text-sm">💼 Maletí: Ampliació contracte a 29h (FS convertit a M)</span>
+                      <span className="text-sm">💼 Maletí: Ampliació contracte (29h) — FS convertit a M puntual</span>
                     </div>
                   </div>
                 </div>
@@ -2009,7 +2009,7 @@ ${frHolidays.map((h, i) => `${i + 1}. ${h.label} - ${h.date} (${h.period})`).joi
                     <li>• Revisa les taules "FR" i "Dies per Demanar" abans d'exportar</li>
                     <li>• Marca els festius que treballes com M perquè apareguin a la taula FR</li>
                     <li>• Usa el botó "Sol·licitud" per generar el document final per copiar o descarregar</li>
-                    <li>• El botó "29h" permet ampliar temporalment el contracte convertint FS→M</li>
+                      <li>• El botó "Ampliació" permet convertir dies de descans (FS) a treballats (M) sense alterar el patró; pensat per divendres-dilluns, però pots afegir altres dies puntuals si cal</li>
                   </ul>
                 </div>
               </div>
@@ -2148,7 +2148,7 @@ ${frHolidays.map((h, i) => `${i + 1}. ${h.label} - ${h.date} (${h.period})`).joi
   "from_previous_year": false,       // Pendent any anterior
   "pending_index": 1,                // Índex pendent
   "pending_label": "VN25",           // Etiqueta
-  "contract_expansion": false,       // Ampliació 29h
+    "contract_expansion": false,       // Ampliació (29h)
   "originally_worked": true          // Era M abans
 }`}
                   </pre>
@@ -2398,7 +2398,7 @@ ${frHolidays.map((h, i) => `${i + 1}. ${h.label} - ${h.date} (${h.period})`).joi
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs relative">M<span className="absolute top-0 left-0 text-[8px]">💼</span></div>
-                        <span>💼 Maletí: Ampliació contracte 29h</span>
+                        <span>💼 Maletí: Ampliació contracte (29h)</span>
                       </div>
                     </div>
                   </div>
