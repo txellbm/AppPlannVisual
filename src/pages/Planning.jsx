@@ -122,41 +122,32 @@ function generateWorkPattern(year) {
     pattern[key] = { date: key, day_type: 'FS' };
   }
 
-  // Reinicia el cicle cada mes: primer divendres = inici cicle 4 dies
-  for (let month = 0; month < 12; month++) {
-    const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0);
+  // Primer divendres de l'any = inici cicle
+  let currentFriday = new Date(startDate);
+  while (currentFriday.getDay() !== 5) { // 5 = divendres
+    currentFriday.setDate(currentFriday.getDate() + 1);
+  }
 
-    // Trobar el primer divendres del mes
-    let currentFriday = new Date(monthStart);
-    while (currentFriday.getDay() !== 5) { // 5 = divendres
-      currentFriday.setDate(currentFriday.getDate() + 1);
-    }
+  // Aplica cicle 4/3 setmanes sense reiniciar per mes
+  let cycleIndex = 0;
+  while (currentFriday <= endDate) {
+    const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
 
-    // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
-    let cycleIndex = 0;
-    while (currentFriday <= monthEnd && currentFriday <= endDate) {
-      const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
+    workOffsets.forEach((offset) => {
+      const workDate = new Date(currentFriday);
+      workDate.setDate(workDate.getDate() + offset);
+      if (workDate > endDate) return;
 
-      workOffsets.forEach((offset) => {
-        const workDate = new Date(currentFriday);
-        workDate.setDate(workDate.getDate() + offset);
-        if (workDate > endDate) return;
+      // Assegurem descans fix cada dimarts, dimecres i dijous
+      const dayOfWeek = workDate.getDay();
+      if (dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) return;
 
-        // No assignem dies fora del mes actual; el cicle es reinicia al primer divendres següent
-        if (workDate.getMonth() !== month) return;
+      const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
+      pattern[key] = { date: key, day_type: 'M' };
+    });
 
-        // Assegurem descans fix cada dimarts, dimecres i dijous
-        const dayOfWeek = workDate.getDay();
-        if (dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) return;
-
-        const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
-        pattern[key] = { date: key, day_type: 'M' };
-      });
-
-      currentFriday.setDate(currentFriday.getDate() + 7);
-      cycleIndex++;
-    }
+    currentFriday.setDate(currentFriday.getDate() + 7);
+    cycleIndex++;
   }
 
   return pattern;
