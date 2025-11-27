@@ -1,10 +1,9 @@
-import { base44 } from './base44Client';
+import { dataStore } from './dataStore';
 
+export const CalendarDay = dataStore.CalendarDay;
 
-export const CalendarDay = base44.entities.CalendarDay;
+export const ManualFR = dataStore.ManualFR;
 
-export const ManualFR = base44.entities.ManualFR;
+export const PendingDay = dataStore.PendingDay;
 
-export const PendingDay = base44.entities.PendingDay;
-
-export const CourseHours = base44.entities.CourseHours;
+export const CourseHours = dataStore.CourseHours;
