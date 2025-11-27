@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, RotateCcw, Undo2, Redo2, Briefcase, FileText, Copy, Download, Plus, Trash2, Upload, Database } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { dataStore } from '@/api/dataStore';
 
 // ===== CONFIGURACIÓ =====
 
@@ -71,6 +71,8 @@ function getFRHolidays(year) {
     { date: `11-09-${year}`, label: 'Diada', period: 'Juny-Set', deadline: '28 febrer' },
     { date: `24-09-${year}`, label: 'Mercè', period: 'Juny-Set', deadline: '28 febrer' },
     { date: `12-10-${year}`, label: 'Festa Nacional', period: 'Oct-Nov', deadline: '15 abril' },
+    { date: `01-11-${year}`, label: 'Tots Sants', period: 'Oct-Nov', deadline: '15 abril' },
+    { date: `06-12-${year}`, label: 'Constitució', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: `08-12-${year}`, label: 'Puríssima', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: `25-12-${year}`, label: 'Nadal', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: `26-12-${year}`, label: 'Sant Esteve', period: 'Des-Gen-Feb', deadline: '15 octubre' }
@@ -118,27 +120,33 @@ function generateWorkPattern(year) {
     pattern[key] = { date: key, day_type: 'FS' };
   }
 
-  // Trobar el primer divendres de l'any
-  let currentFriday = new Date(year, 0, 1);
-  while (currentFriday.getDay() !== 5) { // 5 = divendres
-    currentFriday.setDate(currentFriday.getDate() + 1);
-  }
+  // Reinicia el cicle cada mes: primer divendres = inici cicle 4 dies
+  for (let month = 0; month < 12; month++) {
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
 
-  // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
-  let cycleIndex = 0;
-  while (currentFriday <= endDate) {
-    const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
+    // Trobar el primer divendres del mes
+    let currentFriday = new Date(monthStart);
+    while (currentFriday.getDay() !== 5) { // 5 = divendres
+      currentFriday.setDate(currentFriday.getDate() + 1);
+    }
 
-    workOffsets.forEach((offset) => {
-      const workDate = new Date(currentFriday);
-      workDate.setDate(workDate.getDate() + offset);
-      if (workDate > endDate) return;
-      const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
-      pattern[key] = { date: key, day_type: 'M' };
-    });
+    // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
+    let cycleIndex = 0;
+    while (currentFriday <= monthEnd && currentFriday <= endDate) {
+      const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
 
-    currentFriday.setDate(currentFriday.getDate() + 7);
-    cycleIndex++;
+      workOffsets.forEach((offset) => {
+        const workDate = new Date(currentFriday);
+        workDate.setDate(workDate.getDate() + offset);
+        if (workDate > endDate) return;
+        const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
+        pattern[key] = { date: key, day_type: 'M' };
+      });
+
+      currentFriday.setDate(currentFriday.getDate() + 7);
+      cycleIndex++;
+    }
   }
 
   return pattern;
@@ -248,7 +256,7 @@ export default function Planning() {
     const loadData = async () => {
       try {
         // Carregar dies del calendari
-        const calendarDays = await base44.entities.CalendarDay.filter({ year });
+        const calendarDays = await dataStore.CalendarDay.filter({ year });
         
         if (calendarDays.length > 0) {
           // Hi ha dades al núvol - carregar-les
@@ -296,7 +304,7 @@ export default function Planning() {
         }
 
         // Carregar FR manuals
-        const frRecords = await base44.entities.ManualFR.filter({ year });
+        const frRecords = await dataStore.ManualFR.filter({ year });
         if (frRecords.length > 0) {
           setManualFR(frRecords.map(fr => ({ label: fr.label, date: fr.date || '' })));
         } else {
@@ -307,7 +315,7 @@ export default function Planning() {
         }
 
         // Carregar dies pendents
-        const pendingRecords = await base44.entities.PendingDay.filter({ year });
+        const pendingRecords = await dataStore.PendingDay.filter({ year });
         pendingRecords.sort((a, b) => a.order_index - b.order_index);
         
         if (pendingRecords.length === 0 && year === 2026) {
@@ -324,7 +332,7 @@ export default function Planning() {
         }
 
         // Carregar hores de cursos
-        const courseRecords = await base44.entities.CourseHours.filter({ year });
+        const courseRecords = await dataStore.CourseHours.filter({ year });
         courseRecords.sort((a, b) => a.order_index - b.order_index);
         setCourseHours(courseRecords.map(c => ({
           name: c.name || '',
@@ -360,11 +368,6 @@ export default function Planning() {
     }
 
     try {
-      // Esborrar tots els dies de l'any actual en paral·lel
-      const existingDays = await base44.entities.CalendarDay.filter({ year });
-      const deletePromises = existingDays.map(day => base44.entities.CalendarDay.delete(day.id));
-      await Promise.all(deletePromises);
-
       // Crear nous registres (només camps amb valor definit)
       const records = Object.entries(newCalendar)
         .filter(([_, entry]) => entry && entry.day_type)
@@ -377,7 +380,7 @@ export default function Planning() {
             contract_expansion: entry.contractExpansion === true,
             originally_worked: entry.originallyWorked === true
           };
-          
+
           if (typeof entry.slotIndex === 'number' && entry.slotIndex >= 0) {
             record.slot_index = entry.slotIndex;
           }
@@ -390,13 +393,11 @@ export default function Planning() {
           if (typeof entry.pendingLabel === 'string' && entry.pendingLabel.length > 0) {
             record.pending_label = entry.pendingLabel;
           }
-          
+
           return record;
         });
 
-      if (records.length > 0) {
-        await base44.entities.CalendarDay.bulkCreate(records);
-      }
+      await dataStore.CalendarDay.replaceAll({ year }, records);
       console.log('✅ Calendari guardat al núvol');
     } catch (error) {
       console.error('Error guardant calendari:', error);
@@ -407,18 +408,12 @@ export default function Planning() {
     setManualFR(newFR);
 
     try {
-      const existingFR = await base44.entities.ManualFR.filter({ year });
-      for (const fr of existingFR) {
-        await base44.entities.ManualFR.delete(fr.id);
-      }
       const records = newFR.map((fr) => ({
         year,
         label: typeof fr.label === 'string' ? fr.label : 'FR Manual',
         date: typeof fr.date === 'string' ? fr.date : ''
       }));
-      if (records.length > 0) {
-        await base44.entities.ManualFR.bulkCreate(records);
-      }
+      await dataStore.ManualFR.replaceAll({ year }, records);
     } catch (error) {
       console.error('Error guardant FR manuals:', error);
       alert('⚠️ Error guardant FR manuals al núvol');
@@ -429,11 +424,6 @@ export default function Planning() {
     setPending2025(newPending);
 
     try {
-      // Esborrar tots els pendents existents un per un
-      const existingPending = await base44.entities.PendingDay.filter({ year });
-      const deletePromises = existingPending.map(p => base44.entities.PendingDay.delete(p.id));
-      await Promise.all(deletePromises);
-      
       // Crear nous registres
       const records = newPending
         .filter(p => p.type && p.type.trim() !== '') // Només guardar els que tenen tipus
@@ -443,10 +433,8 @@ export default function Planning() {
           date: p.date || '',
           order_index: idx
         }));
-      
-      if (records.length > 0) {
-        await base44.entities.PendingDay.bulkCreate(records);
-      }
+
+      await dataStore.PendingDay.replaceAll({ year }, records);
       console.log('✅ Dies pendents guardats');
     } catch (error) {
       console.error('Error guardant dies pendents:', error);
@@ -457,10 +445,6 @@ export default function Planning() {
     setCourseHours(newCourses);
 
     try {
-      const existingCourses = await base44.entities.CourseHours.filter({ year });
-      for (const c of existingCourses) {
-        await base44.entities.CourseHours.delete(c.id);
-      }
       const records = newCourses.map((c, idx) => ({
         year,
         name: typeof c.name === 'string' ? c.name : '',
@@ -469,9 +453,7 @@ export default function Planning() {
         used: typeof c.used === 'number' ? c.used : 0,
         order_index: idx
       }));
-      if (records.length > 0) {
-        await base44.entities.CourseHours.bulkCreate(records);
-      }
+      await dataStore.CourseHours.replaceAll({ year }, records);
     } catch (error) {
       console.error('Error guardant hores de cursos:', error);
       alert('⚠️ Error guardant cursos al núvol');
@@ -496,10 +478,6 @@ export default function Planning() {
       setCalendar(prevCalendar);
       
       try {
-        const existingDays = await base44.entities.CalendarDay.filter({ year });
-        for (const day of existingDays) {
-          await base44.entities.CalendarDay.delete(day.id);
-        }
         const records = Object.entries(prevCalendar)
           .filter(([_, entry]) => entry && entry.day_type)
           .map(([dateKey, entry]) => {
@@ -511,7 +489,7 @@ export default function Planning() {
               contract_expansion: entry.contractExpansion === true,
               originally_worked: entry.originallyWorked === true
             };
-            
+
             if (typeof entry.slotIndex === 'number' && entry.slotIndex >= 0) {
               record.slot_index = entry.slotIndex;
             }
@@ -524,12 +502,10 @@ export default function Planning() {
             if (typeof entry.pendingLabel === 'string' && entry.pendingLabel.length > 0) {
               record.pending_label = entry.pendingLabel;
             }
-            
+
             return record;
           });
-        if (records.length > 0) {
-          await base44.entities.CalendarDay.bulkCreate(records);
-        }
+        await dataStore.CalendarDay.replaceAll({ year }, records);
       } catch (error) {
         console.error('Error en undo:', error);
       }
@@ -538,28 +514,24 @@ export default function Planning() {
 
   const redo = async () => {
     if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      const nextCalendar = history[newIndex];
-      setCalendar(nextCalendar);
-      
-      try {
-        const existingDays = await base44.entities.CalendarDay.filter({ year });
-        for (const day of existingDays) {
-          await base44.entities.CalendarDay.delete(day.id);
-        }
-        const records = Object.entries(nextCalendar)
-          .filter(([_, entry]) => entry && entry.day_type)
-          .map(([dateKey, entry]) => {
-            const record = {
-              year,
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        const nextCalendar = history[newIndex];
+        setCalendar(nextCalendar);
+
+        try {
+          const records = Object.entries(nextCalendar)
+            .filter(([_, entry]) => entry && entry.day_type)
+            .map(([dateKey, entry]) => {
+              const record = {
+                year,
               date_key: dateKey,
               day_type: entry.day_type,
               from_previous_year: entry.fromPreviousYear === true,
               contract_expansion: entry.contractExpansion === true,
               originally_worked: entry.originallyWorked === true
             };
-            
+
             if (typeof entry.slotIndex === 'number' && entry.slotIndex >= 0) {
               record.slot_index = entry.slotIndex;
             }
@@ -572,12 +544,10 @@ export default function Planning() {
             if (typeof entry.pendingLabel === 'string' && entry.pendingLabel.length > 0) {
               record.pending_label = entry.pendingLabel;
             }
-            
+
             return record;
           });
-        if (records.length > 0) {
-          await base44.entities.CalendarDay.bulkCreate(records);
-        }
+        await dataStore.CalendarDay.replaceAll({ year }, records);
       } catch (error) {
         console.error('Error en redo:', error);
       }
@@ -766,10 +736,10 @@ export default function Planning() {
     
     try {
       const nextYear = year + 1;
-      const existingPending = await base44.entities.PendingDay.filter({ year: nextYear });
+      const existingPending = await dataStore.PendingDay.filter({ year: nextYear });
       const newOrderIndex = existingPending.length;
       
-      await base44.entities.PendingDay.create({
+      await dataStore.PendingDay.create({
         year: nextYear,
         type: typeLabel,
         date: '',
@@ -1129,10 +1099,10 @@ export default function Planning() {
               <button
                 onClick={async () => {
                   try {
-                    const calendarDays = await base44.entities.CalendarDay.filter({ year });
-                    const frRecords = await base44.entities.ManualFR.filter({ year });
-                    const pendingRecords = await base44.entities.PendingDay.filter({ year });
-                    const courseRecords = await base44.entities.CourseHours.filter({ year });
+                    const calendarDays = await dataStore.CalendarDay.filter({ year });
+                    const frRecords = await dataStore.ManualFR.filter({ year });
+                    const pendingRecords = await dataStore.PendingDay.filter({ year });
+                    const courseRecords = await dataStore.CourseHours.filter({ year });
                     
                     const backup = {
                       year,
@@ -1292,24 +1262,26 @@ export default function Planning() {
                         const holidayName = getHolidayName(dateKey);
                         const date = new Date(year, mi, day);
                         const dayOfWeek = date.getDay();
-                        
+
                         let bgColor = config.color;
                         let textColor = config.textColor;
                         let borderClass = '';
                         let showStar = false;
-                        
+
                         if (dayType === 'M') {
-                          if (weekend || holiday) {
+                          if (weekend) {
                             bgColor = config.colorWeekend;
-                            if (holiday) showStar = true;
                           }
-                        } else if (dayType === 'FS') {
                           if (holiday) {
-                            bgColor = config.colorHoliday;
-                          } else {
-                            bgColor = config.color;
-                            borderClass = config.border;
+                            bgColor = config.colorWeekend;
+                            showStar = true;
                           }
+                        } else if (holiday) {
+                          bgColor = DAY_TYPES.FS.colorHoliday;
+                          textColor = DAY_TYPES.FS.textColor;
+                        } else if (dayType === 'FS') {
+                          bgColor = config.color;
+                          borderClass = config.border;
                         }
                         
                         const dayName = getDayOfWeekName(dayOfWeek);
@@ -1510,10 +1482,10 @@ export default function Planning() {
                                 e.stopPropagation();
                                 try {
                                   const nextYear = year + 1;
-                                  const existingPending = await base44.entities.PendingDay.filter({ year: nextYear });
+                                  const existingPending = await dataStore.PendingDay.filter({ year: nextYear });
                                   const newOrderIndex = existingPending.length;
                                   
-                                  await base44.entities.PendingDay.create({
+                                  await dataStore.PendingDay.create({
                                     year: nextYear,
                                     type: `FR ${fr.date}`,
                                     date: '',
