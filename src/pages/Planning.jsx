@@ -120,27 +120,33 @@ function generateWorkPattern(year) {
     pattern[key] = { date: key, day_type: 'FS' };
   }
 
-  // Trobar el primer divendres de l'any
-  let currentFriday = new Date(year, 0, 1);
-  while (currentFriday.getDay() !== 5) { // 5 = divendres
-    currentFriday.setDate(currentFriday.getDate() + 1);
-  }
+  // Reinicia el cicle cada mes: primer divendres = inici cicle 4 dies
+  for (let month = 0; month < 12; month++) {
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
 
-  // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
-  let cycleIndex = 0;
-  while (currentFriday <= endDate) {
-    const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
+    // Trobar el primer divendres del mes
+    let currentFriday = new Date(monthStart);
+    while (currentFriday.getDay() !== 5) { // 5 = divendres
+      currentFriday.setDate(currentFriday.getDate() + 1);
+    }
 
-    workOffsets.forEach((offset) => {
-      const workDate = new Date(currentFriday);
-      workDate.setDate(workDate.getDate() + offset);
-      if (workDate > endDate) return;
-      const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
-      pattern[key] = { date: key, day_type: 'M' };
-    });
+    // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
+    let cycleIndex = 0;
+    while (currentFriday <= monthEnd && currentFriday <= endDate) {
+      const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
 
-    currentFriday.setDate(currentFriday.getDate() + 7);
-    cycleIndex++;
+      workOffsets.forEach((offset) => {
+        const workDate = new Date(currentFriday);
+        workDate.setDate(workDate.getDate() + offset);
+        if (workDate > endDate) return;
+        const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
+        pattern[key] = { date: key, day_type: 'M' };
+      });
+
+      currentFriday.setDate(currentFriday.getDate() + 7);
+      cycleIndex++;
+    }
   }
 
   return pattern;
