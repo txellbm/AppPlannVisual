@@ -109,41 +109,38 @@ function parseDate(dateStr) {
 
 function generateWorkPattern(year) {
   const pattern = {};
-  
+
+  // Inicialitza tots els dies com a descans
+  const startDate = new Date(year, 0, 1);
+  const endDate = new Date(year, 11, 31);
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const key = formatDateKey(d.getFullYear(), d.getMonth(), d.getDate());
+    pattern[key] = { date: key, day_type: 'FS' };
+  }
+
   // Trobar el primer divendres de l'any
   let currentFriday = new Date(year, 0, 1);
   while (currentFriday.getDay() !== 5) { // 5 = divendres
     currentFriday.setDate(currentFriday.getDate() + 1);
   }
-  
+
+  // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
   let cycleIndex = 0;
-  const endOfYear = new Date(year, 11, 31);
-  
-  while (currentFriday <= endOfYear) {
-    const isLongWeek = cycleIndex % 2 === 0;
-    const daysToWork = isLongWeek ? 4 : 3;
-    
-    for (let i = 0; i < daysToWork; i++) {
+  while (currentFriday <= endDate) {
+    const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
+
+    workOffsets.forEach((offset) => {
       const workDate = new Date(currentFriday);
-      workDate.setDate(workDate.getDate() + i);
+      workDate.setDate(workDate.getDate() + offset);
+      if (workDate > endDate) return;
       const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
       pattern[key] = { date: key, day_type: 'M' };
-    }
-    
+    });
+
     currentFriday.setDate(currentFriday.getDate() + 7);
     cycleIndex++;
   }
-  
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year, 11, 31);
-  
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    const key = formatDateKey(d.getFullYear(), d.getMonth(), d.getDate());
-    if (!pattern[key]) {
-      pattern[key] = { date: key, day_type: 'FS' };
-    }
-  }
-  
+
   return pattern;
 }
 
