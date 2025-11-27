@@ -136,10 +136,24 @@ function generateWorkPattern(year) {
     while (currentFriday <= monthEnd && currentFriday <= endDate) {
       const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
 
+
+    // Aplica el cicle fix: setmana 1 (divendres-dilluns) i setmana 2 (divendres-diumenge)
+    let cycleIndex = 0;
+    while (currentFriday <= monthEnd && currentFriday <= endDate) {
+      const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
+
       workOffsets.forEach((offset) => {
         const workDate = new Date(currentFriday);
         workDate.setDate(workDate.getDate() + offset);
         if (workDate > endDate) return;
+
+        // No assignem dies fora del mes actual; el cicle es reinicia al primer divendres següent
+        if (workDate.getMonth() !== month) return;
+
+        // Assegurem descans fix cada dimarts, dimecres i dijous
+        const dayOfWeek = workDate.getDay();
+        if (dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) return;
+
         const key = formatDateKey(workDate.getFullYear(), workDate.getMonth(), workDate.getDate());
         pattern[key] = { date: key, day_type: 'M' };
       });
@@ -756,7 +770,7 @@ export default function Planning() {
   const handleDayClick = (dateKey) => {
     if (expandingContract) {
       const currentEntry = calendar[dateKey];
-      
+
       if (currentEntry?.contractExpansion) {
         const newCalendar = { ...calendar };
         newCalendar[dateKey] = { date: dateKey, day_type: 'FS' };
@@ -1085,7 +1099,7 @@ export default function Planning() {
                 className={`px-4 py-2 rounded flex items-center gap-2 ${expandingContract ? 'bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
               >
                 <Briefcase className="w-4 h-4" />
-                29h
+                Ampliació
               </button>
 
               <button 
@@ -1151,17 +1165,17 @@ export default function Planning() {
           </div>
         </div>
 
-        {expandingContract && (
-          <div className="bg-green-100 border-l-4 border-green-600 p-4 rounded">
-            <p className="font-bold text-green-900">
-              💼 Ampliant contracte a 29h
-            </p>
-            <p className="text-sm text-green-800">
-              Clica sobre dies de descans (FS) per convertir-los en dies treballats (M). Els dies ampliats es marcaran amb 💼.
-              <button onClick={() => setExpandingContract(false)} className="underline ml-2 font-bold">Finalitzar</button>
-            </p>
-          </div>
-        )}
+          {expandingContract && (
+            <div className="bg-green-100 border-l-4 border-green-600 p-4 rounded">
+              <p className="font-bold text-green-900">
+                💼 Ampliant contracte (29h)
+              </p>
+              <p className="text-sm text-green-800">
+                Clica sobre dies de descans (FS) per convertir-los temporalment en dies treballats (M) sense alterar el patró base. Pensat per ampliar de divendres a dilluns, però pots afegir altres dies puntualment si cal. Els dies ampliats es marcaran amb 💼.
+                <button onClick={() => setExpandingContract(false)} className="underline ml-2 font-bold">Finalitzar</button>
+              </p>
+            </div>
+          )}
 
         {assigningSlot && (
           <div className="bg-yellow-100 border-l-4 border-yellow-600 p-4 rounded">
