@@ -133,6 +133,7 @@ const localDataStore = {
   ManualFR: withReplaceAll('ManualFR'),
   PendingDay: pendingEntity,
   CourseHours: withReplaceAll('CourseHours'),
+  CycleIndex: withReplaceAll('CycleIndex'),
 };
 
 export const dataStore = USE_FIRESTORE ? firestoreDataStore : localDataStore;

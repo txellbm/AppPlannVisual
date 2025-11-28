@@ -74,5 +74,6 @@ export const base44 = {
     ManualFR: createEntity('ManualFR'),
     PendingDay: createEntity('PendingDay'),
     CourseHours: createEntity('CourseHours'),
+    CycleIndex: createEntity('CycleIndex'),
   },
 };
