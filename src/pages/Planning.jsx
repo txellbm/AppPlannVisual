@@ -153,10 +153,10 @@ function extractDateFromLine(line, year) {
     };
   }
 
-  const textMatch = line.toLowerCase().match(/(\d{1,2})\s*(?:de\s+)?([a-zçñà-ÿ]+)/i);
+  const textMatch = line.toLowerCase().match(/(\d{1,2})\s*(?:de\s+|d['’]\s*)?([a-zçñà-ÿ]+)/i);
   if (textMatch) {
     const [, dayStr, monthNameRaw] = textMatch;
-    const cleanedMonth = monthNameRaw.replace(/[\.,]/g, '');
+    const cleanedMonth = monthNameRaw.replace(/[\.,'’]/g, '');
     const month = MONTH_NAME_MAP[cleanedMonth];
     if (!month) return null;
 
