@@ -279,8 +279,19 @@ function generateWorkPattern(year, options = {}) {
   let cycleIndex;
 
   if (continueFromPreviousYear && typeof previousCycleIndex === 'number') {
-    currentFriday = getFridayOnOrBefore(startDate);
-    cycleIndex = previousCycleIndex;
+    const fridayBeforeOrOnStart = getFridayOnOrBefore(startDate);
+    const firstFridayThisYear = new Date(startDate);
+    while (firstFridayThisYear.getDay() !== 5) {
+      firstFridayThisYear.setDate(firstFridayThisYear.getDate() + 1);
+    }
+
+    if (fridayBeforeOrOnStart.getFullYear() < year) {
+      currentFriday = fridayBeforeOrOnStart;
+      cycleIndex = previousCycleIndex;
+    } else {
+      currentFriday = firstFridayThisYear;
+      cycleIndex = previousCycleIndex + 1;
+    }
   } else {
     // Primer divendres de l'any = inici cicle
     currentFriday = new Date(startDate);
@@ -596,9 +607,12 @@ export default function Planning() {
         const nextYear = year + 1;
         const nextCalendarDays = await CalendarDay.filter({ year: nextYear });
         if (nextCalendarDays.length === 0 && nextYear >= MIN_YEAR) {
+          const persistedCycleIndex = await loadCycleIndex(year);
+          const baseCycleIndex = typeof lastCycleIndex === 'number' ? lastCycleIndex : persistedCycleIndex;
+
           const { pattern: nextPattern, lastCycleIndex: nextCycleIndex } = generateWorkPattern(nextYear, {
-            continueFromPreviousYear: typeof lastCycleIndex === 'number',
-            previousCycleIndex: lastCycleIndex,
+            continueFromPreviousYear: typeof baseCycleIndex === 'number',
+            previousCycleIndex: baseCycleIndex,
           });
           const records = calendarHelpers.toRecords(nextPattern, nextYear);
           await CalendarDay.replaceAll({ year: nextYear, records });
