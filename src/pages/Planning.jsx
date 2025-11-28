@@ -57,7 +57,9 @@ const MONTH_NAME_MAP = {
 };
 
 const HOLIDAY_STORAGE_KEY = 'official-holidays-text-by-year';
+const CYCLE_INDEX_STORAGE_KEY = 'work-cycle-index-by-year';
 const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
 function buildHolidayPrompt(nextYear) {
   return `Genera'm la llista oficial de festius laborals de Catalunya i Barcelona per a l'any ${nextYear} en format només de dates numèriques (dd-mm-aaaa), una per línia, sense numerar i sense textos extres.\nInclou:\n— Festius estatals\n— Festius autonòmics de Catalunya\n— Festius locals de Barcelona\nNo incloguis festius compensatoris ni explicacions.`;
@@ -98,6 +100,46 @@ function writeHolidayText(year, text) {
   }
 }
 
+async function loadCycleIndex(year) {
+  if (!isBrowser) return null;
+
+  try {
+    const stored = window.localStorage.getItem(CYCLE_INDEX_STORAGE_KEY);
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored);
+    const value = parsed?.[year];
+    return typeof value === 'number' ? value : null;
+  } catch (err) {
+    console.warn("No s'ha pogut llegir l'índex de cicle:", err);
+    return null;
+  }
+}
+
+async function saveCycleIndex(year, value) {
+  if (!isBrowser) return;
+
+  try {
+    const stored = window.localStorage.getItem(CYCLE_INDEX_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    const byYear = parsed && typeof parsed === 'object' ? parsed : {};
+
+    const nextByYear = { ...byYear, [year]: typeof value === 'number' ? value : null };
+    window.localStorage.setItem(CYCLE_INDEX_STORAGE_KEY, JSON.stringify(nextByYear));
+  } catch (err) {
+    console.warn("No s'ha pogut desar l'índex de cicle:", err);
+  }
+}
+
+function getFirstFriday(targetYear) {
+  const start = new Date(targetYear, 0, 1);
+  const firstFriday = new Date(start);
+  while (firstFriday.getDay() !== 5) {
+    firstFriday.setDate(firstFriday.getDate() + 1);
+  }
+  return firstFriday;
+}
+
 const DAY_INFO = {
   VE: { deadline: '28 febrer', period: '1 juny - 30 setembre' },
   VS: { deadline: '31 gener', period: '1 mes abans/després Divendres Sant' },
@@ -111,14 +153,7 @@ const DAY_INFO = {
 const { CalendarDay, ManualFR, PendingDay, CourseHours, _calendar: calendarHelpers } = dataStore;
 const MIN_YEAR = 2026;
 
-const BASE_FIRST_FRIDAY = (() => {
-  const start = new Date(MIN_YEAR, 0, 1);
-  const firstFriday = new Date(start);
-  while (firstFriday.getDay() !== 5) {
-    firstFriday.setDate(firstFriday.getDate() + 1);
-  }
-  return firstFriday;
-})();
+const BASE_FIRST_FRIDAY = getFirstFriday(MIN_YEAR);
 
 // ===== FUNCIONS =====
 
@@ -194,7 +229,8 @@ function extractDateFromLine(line, year) {
   return null;
 }
 
-function generateWorkPattern(year) {
+function generateWorkPattern(year, options = {}) {
+  const { continueFromPreviousYear = false, previousCycleIndex = null, returnDetails = false } = options;
   const pattern = {};
 
   // Inicialitza tots els dies com a descans
@@ -206,14 +242,18 @@ function generateWorkPattern(year) {
   }
 
   // Primer divendres de l'any = inici cicle
-  let currentFriday = new Date(startDate);
-  while (currentFriday.getDay() !== 5) { // 5 = divendres
-    currentFriday.setDate(currentFriday.getDate() + 1);
-  }
+  let currentFriday = getFirstFriday(year);
 
-  // Continuïtat cicle 4/3 respecte MIN_YEAR
-  const weeksSinceBase = Math.floor((currentFriday - BASE_FIRST_FRIDAY) / (7 * 24 * 60 * 60 * 1000));
-  let cycleIndex = weeksSinceBase >= 0 ? weeksSinceBase : 0;
+  // Continuïtat cicle 4/3 respecte MIN_YEAR o l'any anterior
+  let cycleIndex;
+  if (continueFromPreviousYear && typeof previousCycleIndex === 'number') {
+    const previousFirstFriday = getFirstFriday(year - 1);
+    const weeksSincePrevious = Math.floor((currentFriday - previousFirstFriday) / WEEK_IN_MS);
+    cycleIndex = previousCycleIndex + weeksSincePrevious;
+  } else {
+    const weeksSinceBase = Math.floor((currentFriday - BASE_FIRST_FRIDAY) / WEEK_IN_MS);
+    cycleIndex = weeksSinceBase >= 0 ? weeksSinceBase : 0;
+  }
   while (currentFriday <= endDate) {
     const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
 
@@ -232,6 +272,11 @@ function generateWorkPattern(year) {
 
     currentFriday.setDate(currentFriday.getDate() + 7);
     cycleIndex++;
+  }
+
+  const lastCycleIndex = cycleIndex - 1;
+  if (returnDetails) {
+    return { pattern, lastCycleIndex };
   }
 
   return pattern;
@@ -365,11 +410,11 @@ export default function Planning() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [holidayText, setHolidayText] = useState('');
   const [deletingAssignment, setDeletingAssignment] = useState(false);
+  const [baseWorkPattern, setBaseWorkPattern] = useState({});
+  const [lastCycleIndex, setLastCycleIndex] = useState(null);
 
   const nextHolidayYear = useMemo(() => year + 1, [year]);
   const holidayPrompt = useMemo(() => buildHolidayPrompt(nextHolidayYear), [nextHolidayYear]);
-
-  const baseWorkPattern = useMemo(() => generateWorkPattern(year), [year]);
   const officialHolidays = useMemo(() => parseHolidayText(holidayText, year), [holidayText, year]);
   const officialFRs = useMemo(() => {
     const allowedDays = new Set([1, 5, 6]); // dilluns, divendres, dissabte
@@ -408,6 +453,32 @@ export default function Planning() {
 
     saveCalendar(newCalendar);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const computePattern = async () => {
+      const previousIndex = await loadCycleIndex(year - 1);
+      const { pattern, lastCycleIndex: computedLastCycleIndex } = generateWorkPattern(year, {
+        continueFromPreviousYear: typeof previousIndex === 'number',
+        previousCycleIndex: previousIndex,
+        returnDetails: true,
+      });
+
+      if (!cancelled) {
+        setBaseWorkPattern(pattern);
+        setLastCycleIndex(computedLastCycleIndex);
+      }
+
+      await saveCycleIndex(year, computedLastCycleIndex);
+    };
+
+    computePattern();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [year]);
 
   const handleCopyHolidayPrompt = async () => {
     const targetText = holidayPrompt;
@@ -514,7 +585,10 @@ export default function Planning() {
         const nextYear = year + 1;
         const nextCalendarDays = await CalendarDay.filter({ year: nextYear });
         if (nextCalendarDays.length === 0 && nextYear >= MIN_YEAR) {
-          const nextPattern = generateWorkPattern(nextYear);
+          const nextPattern = generateWorkPattern(nextYear, {
+            continueFromPreviousYear: typeof lastCycleIndex === 'number',
+            previousCycleIndex: lastCycleIndex,
+          });
           const records = calendarHelpers.toRecords(nextPattern, nextYear);
           await CalendarDay.replaceAll({ year: nextYear, records });
           console.log(`🆕 Any ${nextYear} preparat automàticament sense sobreescriure dades`);
@@ -531,7 +605,7 @@ export default function Planning() {
     };
 
     loadData();
-    }, [year, baseWorkPattern]);
+    }, [year, baseWorkPattern, lastCycleIndex]);
 
   const saveCalendar = async (newCalendar) => {
     setCalendar(newCalendar);
