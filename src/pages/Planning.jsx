@@ -349,6 +349,7 @@ export default function Planning() {
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [holidayText, setHolidayText] = useState('');
+  const [holidayTextYear, setHolidayTextYear] = useState(year);
 
   const baseWorkPattern = useMemo(() => generateWorkPattern(year), [year]);
   const officialHolidays = useMemo(() => parseHolidayText(holidayText, year), [holidayText, year]);
@@ -372,11 +373,16 @@ export default function Planning() {
 
   useEffect(() => {
     setHolidayText(readHolidayText(year));
+    setHolidayTextYear(year);
   }, [year]);
 
   useEffect(() => {
+    if (holidayTextYear !== year) {
+      return;
+    }
+
     writeHolidayText(year, holidayText);
-  }, [holidayText, year]);
+  }, [holidayText, holidayTextYear, year]);
 
   useEffect(() => {
     const loadData = async () => {
