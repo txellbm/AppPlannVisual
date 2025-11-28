@@ -105,6 +105,7 @@ const DAY_INFO = {
 };
 
 const { CalendarDay, ManualFR, PendingDay, CourseHours, _calendar: calendarHelpers } = dataStore;
+const MIN_YEAR = 2026;
 
 // ===== FUNCIONS =====
 
@@ -335,7 +336,7 @@ function calculateGoodFriday(year) {
 // ===== COMPONENT =====
 
 export default function Planning() {
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(() => Math.max(MIN_YEAR, new Date().getFullYear()));
   const [calendar, setCalendar] = useState({});
   const [assigningSlot, setAssigningSlot] = useState(null);
   const [assigningFR, setAssigningFR] = useState(null);
@@ -380,6 +381,11 @@ export default function Planning() {
 
   useEffect(() => {
     const loadData = async () => {
+      if (year < MIN_YEAR) {
+        setYear(MIN_YEAR);
+        return;
+      }
+
       try {
         // Carregar dies del calendari
         const calendarDays = await CalendarDay.filter({ year });
@@ -394,10 +400,12 @@ export default function Planning() {
         } else {
           // Només generar patró si no hi ha res
           const pattern = generateWorkPattern(year);
+          const records = calendarHelpers.toRecords(pattern, year);
+          await CalendarDay.replaceAll({ year, records });
           setCalendar(pattern);
           setHistory([pattern]);
           setHistoryIndex(0);
-          console.log(`🔄 Calendari ${year} generat nou`);
+          console.log(`🔄 Calendari ${year} generat nou i guardat`);
         }
 
         // Carregar FR manuals
@@ -437,6 +445,18 @@ export default function Planning() {
           hours: c.hours || 0,
           used: c.used || 0
         })));
+
+        // Prepara l'any següent sense tocar l'actual
+        const nextYear = year + 1;
+        const nextCalendarDays = await CalendarDay.filter({ year: nextYear });
+        if (nextCalendarDays.length === 0 && nextYear >= MIN_YEAR) {
+          const nextPattern = generateWorkPattern(nextYear);
+          const records = calendarHelpers.toRecords(nextPattern, nextYear);
+          await CalendarDay.replaceAll({ year: nextYear, records });
+          console.log(`🆕 Any ${nextYear} preparat automàticament sense sobreescriure dades`);
+        } else if (nextCalendarDays.length > 0) {
+          console.log(`✅ Any ${nextYear} ja existeix, no es regenera`);
+        }
       } catch (error) {
         console.error('Error carregant dades:', error);
         const pattern = generateWorkPattern(year);
@@ -1073,7 +1093,8 @@ export default function Planning() {
               <select
                 value={year}
                 onChange={(e) => {
-                  setYear(Number(e.target.value));
+                  const selectedYear = Math.max(MIN_YEAR, Number(e.target.value));
+                  setYear(selectedYear);
                   setAssigningSlot(null);
                   setAssigningFR(null);
                   setAssigningPending(null);
@@ -1082,12 +1103,34 @@ export default function Planning() {
                 className="border rounded px-3 py-2 font-bold"
               >
                 {(() => {
-                  const currentYear = new Date().getFullYear();
-                  return [currentYear, currentYear + 1].map(y => (
+                  const currentYear = Math.max(MIN_YEAR, new Date().getFullYear());
+                  return Array.from({ length: 5 }, (_, idx) => currentYear + idx).map(y => (
                     <option key={y} value={y}>{y}</option>
                   ));
                 })()}
               </select>
+
+              <button
+                onClick={async () => {
+                  const targetYear = year + 1;
+                  const existing = await CalendarDay.filter({ year: targetYear });
+
+                  if (existing.length > 0) {
+                    alert(`L'any ${targetYear} ja existeix. No es regenera.`);
+                    return;
+                  }
+
+                  const pattern = generateWorkPattern(targetYear);
+                  const records = calendarHelpers.toRecords(pattern, targetYear);
+                  await CalendarDay.replaceAll({ year: targetYear, records });
+                  alert(`✅ Any ${targetYear} generat sense modificar ${year}`);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded flex items-center gap-2 text-sm"
+                title="Prepara l'any següent sense tocar el calendari actual"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Generar {year + 1}
+              </button>
 
               <button
                 onClick={() => {
