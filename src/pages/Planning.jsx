@@ -1205,6 +1205,9 @@ export default function Planning() {
                         let borderClass = '';
                         let showStar = false;
 
+                        const isSundayHoliday = holiday && dayOfWeek === 0;
+                        const starClass = isSundayHoliday ? 'text-gray-400' : 'text-yellow-400';
+
                         const workedHoliday = holiday && baseDayType === 'M';
 
                         if (workedHoliday) {
@@ -1254,11 +1257,11 @@ export default function Planning() {
                         return (
                           <button
                             key={i}
-                            onClick={() => handleDayClick(dateKey)}
-                            className={`w-8 h-8 ${bgColor} ${borderClass} ${textColor} text-[10px] font-bold rounded hover:opacity-80 ${
-                              assigningSlot ? 'ring-2 ring-yellow-400' : ''
-                            } ${isActiveBlock ? 'ring-4 ring-green-500' : ''} ${
-                              isActiveFR ? 'ring-4 ring-green-500' : ''
+                          onClick={() => handleDayClick(dateKey)}
+                          className={`w-8 h-8 ${bgColor} ${borderClass} ${textColor} text-[10px] font-bold rounded hover:opacity-80 ${
+                            assigningSlot ? 'ring-2 ring-yellow-400' : ''
+                          } ${isActiveBlock ? 'ring-4 ring-green-500' : ''} ${
+                            isActiveFR ? 'ring-4 ring-green-500' : ''
                             } ${
                               canAssignFR ? 'ring-2 ring-orange-500 animate-pulse' : ''
                             } ${
@@ -1271,18 +1274,22 @@ export default function Planning() {
                               isActivePending ? 'ring-4 ring-purple-700' : ''
                             } ${
                               canExpandContract ? 'ring-2 ring-green-500 animate-pulse' : ''
-                            } ${
-                              isContractExpansion ? 'ring-2 ring-green-700' : ''
-                            } flex items-center justify-center relative`}
-                            title={tooltipText}
-                          >
-                            <span>{dayType}</span>
-                            {showStar && <span className="absolute top-0 right-0 text-[8px] text-white">⭐</span>}
-                            {entry?.fromPreviousYear && <span className="absolute bottom-0 left-0 text-[8px]">📌</span>}
-                            {isContractExpansion && <span className="absolute top-0 left-0 text-[8px]">💼</span>}
-                          </button>
-                        );
-                      })}
+                          } ${
+                            isContractExpansion ? 'ring-2 ring-green-700' : ''
+                          } flex items-center justify-center relative`}
+                          title={tooltipText}
+                        >
+                          <span>{dayType}</span>
+                          {showStar && (
+                            <span className={`absolute top-0 right-0 text-[8px] ${starClass}`}>
+                              ★
+                            </span>
+                          )}
+                          {entry?.fromPreviousYear && <span className="absolute bottom-0 left-0 text-[8px]">📌</span>}
+                          {isContractExpansion && <span className="absolute top-0 left-0 text-[8px]">💼</span>}
+                        </button>
+                      );
+                    })}
                     </div>
                   </div>
                   
