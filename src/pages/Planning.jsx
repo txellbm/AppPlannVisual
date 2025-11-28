@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, RotateCcw, Undo2, Redo2, Briefcase, FileText, Copy, Download, Plus, Trash2, Upload, Database } from 'lucide-react';
+import { Calendar, Briefcase, FileText, Copy, Download, Plus, Trash2, Upload, Database } from 'lucide-react';
 import { dataStore } from '@/api/dataStore';
 
 // ===== CONFIGURACIÓ =====
@@ -107,6 +107,15 @@ const DAY_INFO = {
 const { CalendarDay, ManualFR, PendingDay, CourseHours, _calendar: calendarHelpers } = dataStore;
 const MIN_YEAR = 2026;
 
+const BASE_FIRST_FRIDAY = (() => {
+  const start = new Date(MIN_YEAR, 0, 1);
+  const firstFriday = new Date(start);
+  while (firstFriday.getDay() !== 5) {
+    firstFriday.setDate(firstFriday.getDate() + 1);
+  }
+  return firstFriday;
+})();
+
 // ===== FUNCIONS =====
 
 function getDaysInMonth(year, month) {
@@ -198,8 +207,9 @@ function generateWorkPattern(year) {
     currentFriday.setDate(currentFriday.getDate() + 1);
   }
 
-  // Aplica cicle 4/3 setmanes sense reiniciar per mes
-  let cycleIndex = 0;
+  // Continuïtat cicle 4/3 respecte MIN_YEAR
+  const weeksSinceBase = Math.floor((currentFriday - BASE_FIRST_FRIDAY) / (7 * 24 * 60 * 60 * 1000));
+  let cycleIndex = weeksSinceBase >= 0 ? weeksSinceBase : 0;
   while (currentFriday <= endDate) {
     const workOffsets = cycleIndex % 2 === 0 ? [0, 1, 2, 3] : [0, 1, 2];
 
@@ -350,6 +360,7 @@ export default function Planning() {
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [holidayText, setHolidayText] = useState('');
+  const [deletingAssignment, setDeletingAssignment] = useState(false);
 
   const baseWorkPattern = useMemo(() => generateWorkPattern(year), [year]);
   const officialHolidays = useMemo(() => parseHolidayText(holidayText, year), [holidayText, year]);
@@ -371,9 +382,29 @@ export default function Planning() {
       .sort((a, b) => new Date(a.dateKey) - new Date(b.dateKey));
   }, [officialHolidays, baseWorkPattern, year]);
 
+  const getBaseDayType = (dateKey) => baseWorkPattern[dateKey]?.day_type || 'FS';
+
+  const restoreDay = (dateKey) => {
+    const existingEntry = calendar[dateKey];
+    if (!existingEntry) return;
+
+    const baseType = getBaseDayType(dateKey);
+    const newCalendar = { ...calendar, [dateKey]: { date: dateKey, day_type: baseType } };
+
+    if (existingEntry.fromPreviousYear && typeof existingEntry.pendingIndex === 'number') {
+      const updatedPending = [...pending2025];
+      if (updatedPending[existingEntry.pendingIndex]) {
+        updatedPending[existingEntry.pendingIndex].date = '';
+        savePending2025(updatedPending);
+      }
+    }
+
+    saveCalendar(newCalendar);
+  };
+
   useEffect(() => {
     setHolidayText(readHolidayText(year));
-  }, [year]);
+  }, [year, baseWorkPattern]);
 
   useEffect(() => {
     writeHolidayText(year, holidayText);
@@ -387,6 +418,9 @@ export default function Planning() {
       }
 
       try {
+        const storedHolidayText = readHolidayText(year);
+        setHolidayText(storedHolidayText);
+
         // Carregar dies del calendari
         const calendarDays = await CalendarDay.filter({ year });
 
@@ -399,7 +433,7 @@ export default function Planning() {
           console.log(`☁️ Calendari ${year} carregat del núvol (${calendarDays.length} dies)`);
         } else {
           // Només generar patró si no hi ha res
-          const pattern = generateWorkPattern(year);
+          const pattern = baseWorkPattern;
           const records = calendarHelpers.toRecords(pattern, year);
           await CalendarDay.replaceAll({ year, records });
           setCalendar(pattern);
@@ -422,7 +456,7 @@ export default function Planning() {
         // Carregar dies pendents
         const pendingRecords = await PendingDay.filter({ year });
         pendingRecords.sort((a, b) => a.order_index - b.order_index);
-        
+
         if (pendingRecords.length === 0 && year === 2026) {
           const defaultPending = [
             { type: 'LD25', date: '' },
@@ -431,7 +465,7 @@ export default function Planning() {
             { type: 'VN25', date: '' },
             { type: 'VN25', date: '' }
           ];
-          setPending2025(defaultPending);
+          await savePending2025(defaultPending);
         } else {
           setPending2025(pendingRecords.map(p => ({ type: p.type, date: p.date || '' })));
         }
@@ -459,7 +493,7 @@ export default function Planning() {
         }
       } catch (error) {
         console.error('Error carregant dades:', error);
-        const pattern = generateWorkPattern(year);
+        const pattern = baseWorkPattern;
         setCalendar(pattern);
         setHistory([pattern]);
         setHistoryIndex(0);
@@ -467,7 +501,7 @@ export default function Planning() {
     };
 
     loadData();
-  }, [year]);
+    }, [year, baseWorkPattern]);
 
   const saveCalendar = async (newCalendar) => {
     setCalendar(newCalendar);
@@ -601,6 +635,7 @@ export default function Planning() {
         setAssigningFR(null);
         setAssigningPending(null);
         setExpandingContract(false);
+        setDeletingAssignment(false);
       }
     };
 
@@ -730,13 +765,12 @@ export default function Planning() {
     if (pendingDate) {
       const [day, month, year] = pendingDate.split('/');
       const dateKey = `${year}-${month}-${day}`;
-      
+
       const newCalendar = { ...calendar };
       if (newCalendar[dateKey]?.fromPreviousYear && newCalendar[dateKey]?.pendingIndex === idx) {
-        const wasTypeFR = newCalendar[dateKey].day_type === 'FR';
-        newCalendar[dateKey] = { 
-          date: dateKey, 
-          day_type: wasTypeFR ? 'M' : 'FS' 
+        newCalendar[dateKey] = {
+          date: dateKey,
+          day_type: getBaseDayType(dateKey)
         };
       }
       
@@ -789,16 +823,25 @@ export default function Planning() {
   };
 
   const handleDayClick = (dateKey) => {
+    if (deletingAssignment) {
+      restoreDay(dateKey);
+      setAssigningSlot(null);
+      setAssigningFR(null);
+      setAssigningPending(null);
+      setExpandingContract(false);
+      return;
+    }
+
     if (expandingContract) {
       const currentEntry = calendar[dateKey];
 
       if (currentEntry?.contractExpansion) {
         const newCalendar = { ...calendar };
-        newCalendar[dateKey] = { date: dateKey, day_type: 'FS' };
+        newCalendar[dateKey] = { date: dateKey, day_type: getBaseDayType(dateKey) };
         saveCalendar(newCalendar);
         return;
       }
-      
+
       if (!currentEntry || currentEntry.day_type !== 'FS') {
         alert('⚠️ Ampliació només es pot fer sobre dies de descans (FS)');
         return;
@@ -816,20 +859,12 @@ export default function Planning() {
     
     if (assigningPending) {
       const currentEntry = calendar[dateKey];
-      
+
       if (currentEntry?.fromPreviousYear && currentEntry?.pendingIndex === assigningPending.index) {
-        const newCalendar = { ...calendar };
-        if (currentEntry.day_type === 'FR') {
-          newCalendar[dateKey] = { date: dateKey, day_type: 'M' };
-        } else {
-          newCalendar[dateKey] = { date: dateKey, day_type: 'FS' };
-        }
-        saveCalendar(newCalendar);
-        
+        restoreDay(dateKey);
         const newPending = [...pending2025];
         newPending[assigningPending.index].date = '';
         savePending2025(newPending);
-        
         setAssigningPending(null);
         return;
       }
@@ -890,8 +925,8 @@ export default function Planning() {
       }
       
       const newCalendar = { ...calendar };
-      newCalendar[dateKey] = { 
-        date: dateKey, 
+      newCalendar[dateKey] = {
+        date: dateKey,
         day_type: 'FR',
         frId: assigningFR.id,
         originallyWorked: true
@@ -900,30 +935,25 @@ export default function Planning() {
       setAssigningFR(null);
       return;
     }
-    
+
     if (!assigningSlot) {
-    // Si no estem assignant res, però cliquem sobre un dia amb tipus especial (VN, LD, etc.), el desassignem
-    const existingEntry = calendar[dateKey];
-    if (existingEntry && existingEntry.slotIndex !== undefined && ['VE', 'VS', 'DS', 'VN', 'LD', 'VC', 'CH'].includes(existingEntry.day_type)) {
-      const newCalendar = { ...calendar };
-      const basePattern = generateWorkPattern(year);
-      const baseType = basePattern[dateKey]?.day_type || 'FS';
-      newCalendar[dateKey] = { date: dateKey, day_type: baseType };
-      saveCalendar(newCalendar);
+      // Si no estem assignant res, però cliquem sobre un dia amb tipus especial (VN, LD, etc.), el desassignem
+      const existingEntry = calendar[dateKey];
+      if (existingEntry && existingEntry.slotIndex !== undefined && ['VE', 'VS', 'DS', 'VN', 'LD', 'VC', 'CH'].includes(existingEntry.day_type)) {
+        restoreDay(dateKey);
+      }
+      return;
     }
-    return;
-  }
-    
+
     const newCalendar = { ...calendar };
     const existingEntry = newCalendar[dateKey];
     
     // Si cliquem sobre un dia ja assignat al mateix slot, el desassignem
-    if (existingEntry && 
-        existingEntry.day_type === assigningSlot.type && 
+    if (existingEntry &&
+        existingEntry.day_type === assigningSlot.type &&
         existingEntry.slotIndex === assigningSlot.index) {
       // Recuperar el patró base (M o FS segons el patró de treball)
-      const basePattern = generateWorkPattern(year);
-      const baseType = basePattern[dateKey]?.day_type || 'FS';
+      const baseType = getBaseDayType(dateKey);
       newCalendar[dateKey] = { date: dateKey, day_type: baseType };
       saveCalendar(newCalendar);
       return;
@@ -943,8 +973,7 @@ export default function Planning() {
       );
       if (previousAssigned) {
         const [prevDateKey] = previousAssigned;
-        const basePattern = generateWorkPattern(year);
-        const baseType = basePattern[prevDateKey]?.day_type || 'FS';
+        const baseType = getBaseDayType(prevDateKey);
         newCalendar[prevDateKey] = { date: prevDateKey, day_type: baseType };
       }
       
@@ -963,6 +992,7 @@ export default function Planning() {
     setAssigningFR(null);
     setAssigningPending(null);
     setExpandingContract(false);
+    setDeletingAssignment(false);
   };
   
   const handleFRClick = (frId, label) => {
@@ -970,6 +1000,7 @@ export default function Planning() {
     setAssigningSlot(null);
     setAssigningPending(null);
     setExpandingContract(false);
+    setDeletingAssignment(false);
   };
   
   const handlePendingClick = (index, type) => {
@@ -977,27 +1008,11 @@ export default function Planning() {
     setAssigningSlot(null);
     setAssigningFR(null);
     setExpandingContract(false);
+    setDeletingAssignment(false);
   };
   
   const handleFinishBlock = () => {
     setAssigningSlot(null);
-  };
-
-  const handleReset = () => {
-    const confirmText = `⚠️ ATENCIÓ: Aquesta acció esborrarà tot el calendari de ${year} i regenerarà el patró de treball bàsic.\n\n` +
-      `S'eliminaran:\n` +
-      `• Totes les vacances assignades (VE, VS, VN, etc.)\n` +
-      `• Tots els festius recuperables (FR)\n` +
-      `• Tots els dies pendents assignats\n` +
-      `• Ampliacions de contracte 29h\n\n` +
-      `Recomanació: Fes un BACKUP abans de continuar.\n\n` +
-      `Vols continuar?`;
-    
-    if (confirm(confirmText)) {
-      const pattern = generateWorkPattern(year);
-      saveCalendar(pattern);
-      alert('✅ Calendari regenerat. Pots recuperar l\'estat anterior amb Ctrl+Z');
-    }
   };
 
   const getAssignedDates = () => {
@@ -1072,24 +1087,6 @@ export default function Planning() {
             </div>
             
             <div className="flex gap-2">
-              <button
-                onClick={undo}
-                disabled={historyIndex <= 0}
-                className={`px-3 py-2 rounded flex items-center gap-1 ${historyIndex <= 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
-                title="Desfer (Ctrl+Z)"
-              >
-                <Undo2 className="w-4 h-4" />
-              </button>
-              
-              <button
-                onClick={redo}
-                disabled={historyIndex >= history.length - 1}
-                className={`px-3 py-2 rounded flex items-center gap-1 ${historyIndex >= history.length - 1 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
-                title="Refer (Ctrl+Y)"
-              >
-                <Redo2 className="w-4 h-4" />
-              </button>
-
               <select
                 value={year}
                 onChange={(e) => {
@@ -1099,6 +1096,7 @@ export default function Planning() {
                   setAssigningFR(null);
                   setAssigningPending(null);
                   setExpandingContract(false);
+                  setDeletingAssignment(false);
                 }}
                 className="border rounded px-3 py-2 font-bold"
               >
@@ -1111,33 +1109,12 @@ export default function Planning() {
               </select>
 
               <button
-                onClick={async () => {
-                  const targetYear = year + 1;
-                  const existing = await CalendarDay.filter({ year: targetYear });
-
-                  if (existing.length > 0) {
-                    alert(`L'any ${targetYear} ja existeix. No es regenera.`);
-                    return;
-                  }
-
-                  const pattern = generateWorkPattern(targetYear);
-                  const records = calendarHelpers.toRecords(pattern, targetYear);
-                  await CalendarDay.replaceAll({ year: targetYear, records });
-                  alert(`✅ Any ${targetYear} generat sense modificar ${year}`);
-                }}
-                className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded flex items-center gap-2 text-sm"
-                title="Prepara l'any següent sense tocar el calendari actual"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Generar {year + 1}
-              </button>
-
-              <button
                 onClick={() => {
                   setExpandingContract(!expandingContract);
                   setAssigningSlot(null);
                   setAssigningFR(null);
                   setAssigningPending(null);
+                  setDeletingAssignment(false);
                 }}
                 className={`px-4 py-2 rounded flex items-center gap-2 ${expandingContract ? 'bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
               >
@@ -1145,7 +1122,25 @@ export default function Planning() {
                 Ampliació
               </button>
 
-              <button 
+              <button
+                onClick={() => {
+                  const nextState = !deletingAssignment;
+                  setDeletingAssignment(nextState);
+                  if (nextState) {
+                    setAssigningSlot(null);
+                    setAssigningFR(null);
+                    setAssigningPending(null);
+                    setExpandingContract(false);
+                  }
+                }}
+                className={`px-3 py-2 rounded flex items-center gap-2 text-sm ${deletingAssignment ? 'bg-red-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                title="Activa el mode esborrar assignació"
+              >
+                <Trash2 className="w-4 h-4" />
+                Borrar assignació
+              </button>
+
+              <button
                 onClick={() => setShowSolicitud(!showSolicitud)}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded flex items-center gap-2"
               >
@@ -1189,20 +1184,11 @@ export default function Planning() {
                 <span className="hidden sm:inline">Backup</span>
               </button>
               
-              <button 
+              <button
                 onClick={() => setShowNormativa(!showNormativa)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm"
               >
                 {showNormativa ? 'Amagar' : 'Normativa'}
-              </button>
-              
-              <button 
-                onClick={handleReset} 
-                className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded flex items-center gap-2 text-sm"
-                title="⚠️ Regenerar calendari (esborrarà tot)"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span className="hidden sm:inline">Reset</span>
               </button>
             </div>
           </div>
@@ -1303,8 +1289,8 @@ export default function Planning() {
                         
                         const dateKey = formatDateKey(year, mi, day);
                         const entry = calendar[dateKey];
-                        const dayType = entry?.day_type || 'FS';
                         const baseDayType = baseWorkPattern[dateKey]?.day_type || 'FS';
+                        const dayType = entry?.day_type || baseDayType;
                         const config = DAY_TYPES[dayType];
                         
                         const isActiveBlock = assigningSlot && 
