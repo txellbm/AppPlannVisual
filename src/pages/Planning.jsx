@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, RotateCcw, Undo2, Redo2, Briefcase, FileText, Copy, Download, Plus, Trash2, Upload, Database } from 'lucide-react';
 import { dataStore } from '@/api/dataStore';
 
@@ -60,12 +60,33 @@ function getEasterDates(year) {
 function getOfficialHolidays(year) {
   const easter = getEasterDates(year);
 
+  if (year === 2026) {
+    return [
+      { date: `01-01-${year}`, label: 'Any Nou', period: 'Des-Gen-Feb', deadline: '15 octubre' },
+      { date: `06-01-${year}`, label: 'Reis', period: 'Des-Gen-Feb', deadline: '15 octubre' },
+      { date: '03-04-2026', label: 'Divendres Sant', period: 'Març-Maig', deadline: '31 gener' },
+      { date: '06-04-2026', label: 'Dilluns Pasqua', period: 'Març-Maig', deadline: '31 gener' },
+      { date: `01-05-${year}`, label: 'Festa del Treball', period: 'Març-Maig', deadline: '31 gener' },
+      { date: `25-05-${year}`, label: 'Segona Pasqua (P. Granada)', period: 'Març-Maig', deadline: '31 gener' },
+      { date: `24-06-${year}`, label: 'Sant Joan', period: 'Juny-Set', deadline: '28 febrer' },
+      { date: `15-08-${year}`, label: 'Assumpció', period: 'Juny-Set', deadline: '28 febrer' },
+      { date: `11-09-${year}`, label: 'Diada', period: 'Juny-Set', deadline: '28 febrer' },
+      { date: `24-09-${year}`, label: 'Mercè', period: 'Juny-Set', deadline: '28 febrer' },
+      { date: `12-10-${year}`, label: 'Festa Nacional', period: 'Oct-Nov', deadline: '15 abril' },
+      { date: `01-11-${year}`, label: 'Tots Sants', period: 'Oct-Nov', deadline: '15 abril' },
+      { date: `06-12-${year}`, label: 'Constitució', period: 'Des-Gen-Feb', deadline: '15 octubre' },
+      { date: `08-12-${year}`, label: 'Puríssima', period: 'Des-Gen-Feb', deadline: '15 octubre' },
+      { date: `25-12-${year}`, label: 'Nadal', period: 'Des-Gen-Feb', deadline: '15 octubre' },
+      { date: `26-12-${year}`, label: 'Sant Esteve', period: 'Des-Gen-Feb', deadline: '15 octubre' }
+    ];
+  }
+
   const holidays = [
     { date: `01-01-${year}`, label: 'Any Nou', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: `06-01-${year}`, label: 'Reis', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: easter.goodFriday, label: 'Divendres Sant', period: 'Març-Maig', deadline: '31 gener' },
     { date: easter.easterMonday, label: 'Dilluns Pasqua', period: 'Març-Maig', deadline: '31 gener' },
-    { date: `01-05-${year}`, label: 'Festa Treball', period: 'Març-Maig', deadline: '31 gener' },
+    { date: `01-05-${year}`, label: 'Festa del Treball', period: 'Març-Maig', deadline: '31 gener' },
     { date: `24-06-${year}`, label: 'Sant Joan', period: 'Juny-Set', deadline: '28 febrer' },
     { date: `15-08-${year}`, label: 'Assumpció', period: 'Juny-Set', deadline: '28 febrer' },
     { date: `11-09-${year}`, label: 'Diada', period: 'Juny-Set', deadline: '28 febrer' },
@@ -77,22 +98,6 @@ function getOfficialHolidays(year) {
     { date: `25-12-${year}`, label: 'Nadal', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: `26-12-${year}`, label: 'Sant Esteve', period: 'Des-Gen-Feb', deadline: '15 octubre' }
   ];
-
-  if (year === 2026) {
-    const pentecostMonday = {
-      date: `25-05-${year}`,
-      label: 'Dilluns de Pasqua Granada (Segona Pasqua)',
-      period: 'Març-Maig',
-      deadline: '31 gener'
-    };
-
-    const summerStartIndex = holidays.findIndex(h => h.date === `24-06-${year}`);
-    if (summerStartIndex !== -1) {
-      holidays.splice(summerStartIndex, 0, pentecostMonday);
-    } else {
-      holidays.push(pentecostMonday);
-    }
-  }
 
   return holidays;
 }
@@ -275,6 +280,26 @@ export default function Planning() {
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
+  const baseWorkPattern = useMemo(() => generateWorkPattern(year), [year]);
+  const officialHolidays = useMemo(() => getFRHolidays(year), [year]);
+  const officialFRs = useMemo(() => {
+    const allowedDays = new Set([1, 5, 6]); // dilluns, divendres, dissabte
+
+    return officialHolidays
+      .map((holiday, idx) => {
+        const dateKey = parseDate(holiday.date);
+        const day = new Date(`${dateKey}T00:00:00`).getDay();
+        const isWorked = baseWorkPattern[dateKey]?.day_type === 'M';
+
+        if (isWorked && allowedDays.has(day) && day !== 0) {
+          return { ...holiday, id: `official-${idx}`, dateKey };
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(a.dateKey) - new Date(b.dateKey));
+  }, [officialHolidays, baseWorkPattern, year]);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -300,11 +325,11 @@ export default function Planning() {
         // Carregar FR manuals
         const frRecords = await ManualFR.filter({ year });
         if (frRecords.length > 0) {
-          setManualFR(frRecords.map(fr => ({ label: fr.label, date: fr.date || '' })));
+          const firstFR = frRecords[0];
+          setManualFR([{ label: firstFR.label || 'SCR / RRHH', date: firstFR.date || '' }]);
         } else {
           setManualFR([
-            { label: 'FR Manual 1', date: '' },
-            { label: 'FR Manual 2', date: '' }
+            { label: 'SCR / RRHH', date: '' }
           ]);
         }
 
@@ -366,12 +391,13 @@ export default function Planning() {
   };
 
   const saveManualFR = async (newFR) => {
-    setManualFR(newFR);
+    const normalizedFR = newFR.slice(0, 1);
+    setManualFR(normalizedFR);
 
     try {
-      const records = newFR.map((fr) => ({
+      const records = normalizedFR.map((fr) => ({
         year,
-        label: typeof fr.label === 'string' ? fr.label : 'FR Manual',
+        label: typeof fr.label === 'string' ? fr.label : 'SCR / RRHH',
         date: typeof fr.date === 'string' ? fr.date : ''
       }));
       await ManualFR.replaceAll({ year }, records);
@@ -909,16 +935,15 @@ export default function Planning() {
   
   const getFRLabel = (frId) => {
     if (!frId) return null;
-    
+
     if (frId.startsWith('official-')) {
       const index = parseInt(frId.replace('official-', ''));
-      const holidays = getFRHolidays(year);
-      return holidays[index]?.label || null;
+      return officialHolidays[index]?.label || null;
     }
     
     if (frId.startsWith('manual-')) {
       const index = parseInt(frId.replace('manual-', ''));
-      return manualFR[index]?.label || 'FR Manual';
+      return manualFR[index]?.label || 'SCR / RRHH';
     }
     
     return null;
@@ -1158,6 +1183,7 @@ export default function Planning() {
                         const dateKey = formatDateKey(year, mi, day);
                         const entry = calendar[dateKey];
                         const dayType = entry?.day_type || 'FS';
+                        const baseDayType = baseWorkPattern[dateKey]?.day_type || 'FS';
                         const config = DAY_TYPES[dayType];
                         
                         const isActiveBlock = assigningSlot && 
@@ -1179,7 +1205,13 @@ export default function Planning() {
                         let borderClass = '';
                         let showStar = false;
 
-                        if (dayType === 'M') {
+                        const workedHoliday = holiday && baseDayType === 'M';
+
+                        if (workedHoliday) {
+                          bgColor = DAY_TYPES.M.colorWeekend;
+                          textColor = DAY_TYPES.M.textColor;
+                          showStar = true;
+                        } else if (dayType === 'M') {
                           if (weekend) {
                             bgColor = config.colorWeekend;
                           }
@@ -1359,23 +1391,19 @@ export default function Planning() {
                 </tr>
               </thead>
               <tbody>
-                {getFRHolidays(year)
-                  .filter(fr => {
-                    const dateKey = parseDate(fr.date);
-                    return calendar[dateKey]?.day_type === 'M';
-                  })
-                  .map((fr, idx) => {
-                    const frId = `official-${getFRHolidays(year).findIndex(h => h.date === fr.date)}`;
+                {officialFRs
+                  .map((fr) => {
+                    const frId = fr.id;
                     const assignedDate = getAssignedFR(frId);
                     const isActive = assigningFR?.id === frId;
                     const canMoveToNextYear = fr.period === 'Des-Gen-Feb';
                     
-                    return (
-                      <tr 
-                        key={idx}
-                        className={`cursor-pointer hover:bg-gray-50 ${isActive ? 'bg-yellow-100' : ''}`}
-                        onClick={() => handleFRClick(frId, fr.label)}
-                      >
+                      return (
+                        <tr
+                          key={frId}
+                          className={`cursor-pointer hover:bg-gray-50 ${isActive ? 'bg-yellow-100' : ''}`}
+                          onClick={() => handleFRClick(frId, fr.label)}
+                        >
                         <td className="border p-1 text-center">
                           <div className="bg-orange-500 text-white font-bold text-[10px] rounded px-1 py-0.5">
                             FR {fr.date}
@@ -1436,7 +1464,7 @@ export default function Planning() {
                     >
                       <td className="border p-1 text-center">
                         <div className="bg-orange-500 text-white font-bold text-[10px] rounded px-1 py-0.5 flex items-center justify-center gap-1">
-                          <span className="text-[8px]">📅</span>
+                          <span className="text-[9px] uppercase tracking-tight">{fr.label || 'SCR / RRHH'}</span>
                           <input
                             type="date"
                             value={dateDisplayToInput(fr.date)}
@@ -1472,7 +1500,7 @@ export default function Planning() {
             </table>
             
             <div className="mt-3 text-xs text-gray-600">
-              <p>💡 Només es mostren els festius oficials que has marcat com treballats (M) al calendari</p>
+              <p>💡 Només es mostren els festius oficials treballats (divendres, dissabte o dilluns; mai diumenges) segons el patró 4/3.</p>
               <p className="mt-1">📅 Per als FR manuals, clica sobre el calendari 📅 per seleccionar la data del festiu - el període i deadline es calcularan automàticament</p>
             </div>
           </div>
