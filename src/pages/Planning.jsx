@@ -57,10 +57,10 @@ function getEasterDates(year) {
 }
 
 // Genera festius per qualsevol any
-function getFRHolidays(year) {
+function getOfficialHolidays(year) {
   const easter = getEasterDates(year);
-  
-  return [
+
+  const holidays = [
     { date: `01-01-${year}`, label: 'Any Nou', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: `06-01-${year}`, label: 'Reis', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: easter.goodFriday, label: 'Divendres Sant', period: 'Març-Maig', deadline: '31 gener' },
@@ -77,6 +77,28 @@ function getFRHolidays(year) {
     { date: `25-12-${year}`, label: 'Nadal', period: 'Des-Gen-Feb', deadline: '15 octubre' },
     { date: `26-12-${year}`, label: 'Sant Esteve', period: 'Des-Gen-Feb', deadline: '15 octubre' }
   ];
+
+  if (year === 2026) {
+    const pentecostMonday = {
+      date: `25-05-${year}`,
+      label: 'Dilluns de Pasqua Granada (Segona Pasqua)',
+      period: 'Març-Maig',
+      deadline: '31 gener'
+    };
+
+    const summerStartIndex = holidays.findIndex(h => h.date === `24-06-${year}`);
+    if (summerStartIndex !== -1) {
+      holidays.splice(summerStartIndex, 0, pentecostMonday);
+    } else {
+      holidays.push(pentecostMonday);
+    }
+  }
+
+  return holidays;
+}
+
+function getFRHolidays(year) {
+  return getOfficialHolidays(year);
 }
 
 const DAY_INFO = {
@@ -163,14 +185,14 @@ function isWeekend(dateKey) {
 function isOfficialHoliday(dateKey, year) {
   const [y, month, day] = dateKey.split('-');
   const displayDate = `${day}-${month}-${y}`;
-  const holidays = getFRHolidays(Number(y));
+  const holidays = getOfficialHolidays(Number(y));
   return holidays.some(h => h.date === displayDate);
 }
 
 function getHolidayName(dateKey) {
   const [y, month, day] = dateKey.split('-');
   const displayDate = `${day}-${month}-${y}`;
-  const holidays = getFRHolidays(Number(y));
+  const holidays = getOfficialHolidays(Number(y));
   const holiday = holidays.find(h => h.date === displayDate);
   return holiday ? holiday.label : null;
 }
