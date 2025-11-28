@@ -49,4 +49,5 @@ export const firestoreDataStore = {
   ManualFR: withReplaceAll('ManualFR'),
   PendingDay: pendingEntity,
   CourseHours: withReplaceAll('CourseHours'),
+  CycleIndex: withReplaceAll('CycleIndex'),
 };
