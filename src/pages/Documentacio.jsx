@@ -1997,7 +1997,7 @@ ${frHolidays.map((h, i) => `${i + 1}. ${h.label} - ${h.date} (${h.period})`).joi
                     <li>• <strong>FR només sobre M:</strong> Els festius recuperables només es poden assignar sobre dies treballats. Si converteixes M→FS, perdràs el FR.</li>
                     <li>• <strong>VE en blocs:</strong> Les vacances d'estiu van en 3 períodes separats. Recomanació: mínim 7 dies per bloc i 7 dies entre blocs.</li>
                     <li>• <strong>Dies pendents:</strong> Els VN/LD/VC/CH de l'any anterior es poden gaudir fins al 31 gener. Els FR segons el seu període.</li>
-                    <li>• <strong>Festius per any:</strong> Els festius oficials estan hardcoded per any. Cal actualitzar-los manualment (o usar FR manuals).</li>
+                    <li>• <strong>Festius per any:</strong> Enganxa el llistat oficial al panell "Festius oficials". El calendari només marcarà les dates detectades (sense límit).</li>
                   </ul>
                 </div>
 
@@ -2471,7 +2471,7 @@ ${frHolidays.map((h, i) => `${i + 1}. ${h.label} - ${h.date} (${h.period})`).joi
                       <strong>Pendents fins 31 gener:</strong> Els dies pendents de l'any anterior (VN, LD, VC, CH) es poden gaudir fins al 31 de gener. Els FR pendents segons el seu període.
                     </div>
                     <div className="bg-purple-50 p-3 rounded">
-                      <strong>Festius hardcoded:</strong> Els festius oficials estan definits per any al codi (FR_HOLIDAYS_2026). Cal actualitzar-los manualment cada any.
+                      <strong>Festius oficials:</strong> Enganxa cada any el llistat oficial al panell corresponent. El sistema els detecta i marca al calendari (incloent diumenges si hi són).
                     </div>
                     <div className="bg-orange-50 p-3 rounded">
                       <strong>LocalStorage:</strong> Les dades es guarden al navegador. Si esborres les dades del navegador o canvies de dispositiu, perdràs el planning. Exporta regularment!

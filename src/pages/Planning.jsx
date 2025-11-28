@@ -19,91 +19,79 @@ const DAY_TYPES = {
 
 const MONTHS = ['Gener', 'Febrer', 'Març', 'Abril', 'Maig', 'Juny', 'Juliol', 'Agost', 'Setembre', 'Octubre', 'Novembre', 'Desembre'];
 
-// Funció per calcular Divendres Sant i Dilluns de Pasqua
-function getEasterDates(year) {
-  const a = year % 19;
-  const b = Math.floor(year / 100);
-  const c = year % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31);
-  const day = ((h + l - 7 * m + 114) % 31) + 1;
-  
-  const easterSunday = new Date(year, month - 1, day);
-  
-  const goodFriday = new Date(easterSunday);
-  goodFriday.setDate(goodFriday.getDate() - 2);
-  
-  const easterMonday = new Date(easterSunday);
-  easterMonday.setDate(easterMonday.getDate() + 1);
-  
-  const formatDate = (d) => {
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    return `${dd}-${mm}-${year}`;
-  };
-  
-  return {
-    goodFriday: formatDate(goodFriday),
-    easterMonday: formatDate(easterMonday)
-  };
-}
+const MONTH_NAME_MAP = {
+  gener: 1,
+  enero: 1,
+  january: 1,
+  febrer: 2,
+  febrero: 2,
+  february: 2,
+  març: 3,
+  marzo: 3,
+  march: 3,
+  abril: 4,
+  april: 4,
+  maig: 5,
+  mayo: 5,
+  may: 5,
+  juny: 6,
+  junio: 6,
+  june: 6,
+  juliol: 7,
+  julio: 7,
+  july: 7,
+  agost: 8,
+  agosto: 8,
+  august: 8,
+  setembre: 9,
+  septiembre: 9,
+  september: 9,
+  octubre: 10,
+  october: 10,
+  novembre: 11,
+  noviembre: 11,
+  november: 11,
+  desembre: 12,
+  diciembre: 12,
+  december: 12,
+};
 
-// Genera festius per qualsevol any
-function getOfficialHolidays(year) {
-  const easter = getEasterDates(year);
+const HOLIDAY_STORAGE_KEY = 'official-holidays-text-by-year';
+const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
-  if (year === 2026) {
-    return [
-      { date: `01-01-${year}`, label: 'Any Nou', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-      { date: `06-01-${year}`, label: 'Reis', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-      { date: '03-04-2026', label: 'Divendres Sant', period: 'Març-Maig', deadline: '31 gener' },
-      { date: '06-04-2026', label: 'Dilluns Pasqua', period: 'Març-Maig', deadline: '31 gener' },
-      { date: `01-05-${year}`, label: 'Festa del Treball', period: 'Març-Maig', deadline: '31 gener' },
-      { date: `25-05-${year}`, label: 'Segona Pasqua (P. Granada)', period: 'Març-Maig', deadline: '31 gener' },
-      { date: `24-06-${year}`, label: 'Sant Joan', period: 'Juny-Set', deadline: '28 febrer' },
-      { date: `15-08-${year}`, label: 'Assumpció', period: 'Juny-Set', deadline: '28 febrer' },
-      { date: `11-09-${year}`, label: 'Diada', period: 'Juny-Set', deadline: '28 febrer' },
-      { date: `24-09-${year}`, label: 'Mercè', period: 'Juny-Set', deadline: '28 febrer' },
-      { date: `12-10-${year}`, label: 'Festa Nacional', period: 'Oct-Nov', deadline: '15 abril' },
-      { date: `01-11-${year}`, label: 'Tots Sants', period: 'Oct-Nov', deadline: '15 abril' },
-      { date: `06-12-${year}`, label: 'Constitució', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-      { date: `08-12-${year}`, label: 'Puríssima', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-      { date: `25-12-${year}`, label: 'Nadal', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-      { date: `26-12-${year}`, label: 'Sant Esteve', period: 'Des-Gen-Feb', deadline: '15 octubre' }
-    ];
+function readHolidayText(year) {
+  if (!isBrowser) return '';
+
+  try {
+    const stored = window.localStorage.getItem(HOLIDAY_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === 'object') {
+        return parsed[year] || '';
+      }
+    }
+  } catch (err) {
+    console.warn('No s\'ha pogut llegir festius locals:', err);
   }
 
-  const holidays = [
-    { date: `01-01-${year}`, label: 'Any Nou', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-    { date: `06-01-${year}`, label: 'Reis', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-    { date: easter.goodFriday, label: 'Divendres Sant', period: 'Març-Maig', deadline: '31 gener' },
-    { date: easter.easterMonday, label: 'Dilluns Pasqua', period: 'Març-Maig', deadline: '31 gener' },
-    { date: `01-05-${year}`, label: 'Festa del Treball', period: 'Març-Maig', deadline: '31 gener' },
-    { date: `24-06-${year}`, label: 'Sant Joan', period: 'Juny-Set', deadline: '28 febrer' },
-    { date: `15-08-${year}`, label: 'Assumpció', period: 'Juny-Set', deadline: '28 febrer' },
-    { date: `11-09-${year}`, label: 'Diada', period: 'Juny-Set', deadline: '28 febrer' },
-    { date: `24-09-${year}`, label: 'Mercè', period: 'Juny-Set', deadline: '28 febrer' },
-    { date: `12-10-${year}`, label: 'Festa Nacional', period: 'Oct-Nov', deadline: '15 abril' },
-    { date: `01-11-${year}`, label: 'Tots Sants', period: 'Oct-Nov', deadline: '15 abril' },
-    { date: `06-12-${year}`, label: 'Constitució', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-    { date: `08-12-${year}`, label: 'Puríssima', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-    { date: `25-12-${year}`, label: 'Nadal', period: 'Des-Gen-Feb', deadline: '15 octubre' },
-    { date: `26-12-${year}`, label: 'Sant Esteve', period: 'Des-Gen-Feb', deadline: '15 octubre' }
-  ];
-
-  return holidays;
+  // Compatibilitat amb l'emmagatzematge antic per any
+  const legacy = window.localStorage.getItem(`official-holidays-text-${year}`);
+  return legacy || '';
 }
 
-function getFRHolidays(year) {
-  return getOfficialHolidays(year);
+function writeHolidayText(year, text) {
+  if (!isBrowser) return;
+
+  try {
+    const stored = window.localStorage.getItem(HOLIDAY_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    const byYear = parsed && typeof parsed === 'object' ? parsed : {};
+
+    const nextByYear = { ...byYear, [year]: text || '' };
+    window.localStorage.setItem(HOLIDAY_STORAGE_KEY, JSON.stringify(nextByYear));
+  } catch (err) {
+    console.warn('No s\'ha pogut desar festius locals:', err);
+  }
 }
 
 const DAY_INFO = {
@@ -136,6 +124,60 @@ function formatDateDisplay(dateKey) {
 function parseDate(dateStr) {
   const [day, month, year] = dateStr.split('-');
   return `${year}-${month}-${day}`;
+}
+
+function normalizeYear(rawYear, fallbackYear) {
+  if (!rawYear) return fallbackYear;
+  const numericYear = rawYear.length === 2 ? Number(`20${rawYear}`) : Number(rawYear);
+  return Number.isFinite(numericYear) ? numericYear : fallbackYear;
+}
+
+function extractDateFromLine(line, year) {
+  const numericMatch = line.match(/(\d{1,2})[\/\.\-\s](\d{1,2})(?:[\/\.\-\s](\d{2,4}))?/);
+  if (numericMatch) {
+    const [, dayStr, monthStr, rawYear] = numericMatch;
+    const day = Number(dayStr);
+    const month = Number(monthStr);
+    const normalizedYear = normalizeYear(rawYear, year);
+    if (normalizedYear !== year) return null;
+
+    const parsedDate = new Date(normalizedYear, month - 1, day);
+    if (parsedDate.getFullYear() !== normalizedYear || parsedDate.getMonth() !== month - 1 || parsedDate.getDate() !== day) {
+      return null;
+    }
+
+    const label = line.replace(numericMatch[0], '').replace(/^[\s:;\-–,\.]+/, '').trim();
+    return {
+      date: `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}-${normalizedYear}`,
+      label,
+    };
+  }
+
+  const textMatch = line.toLowerCase().match(/(\d{1,2})\s*(?:de\s+)?([a-zçñà-ÿ]+)/i);
+  if (textMatch) {
+    const [, dayStr, monthNameRaw] = textMatch;
+    const cleanedMonth = monthNameRaw.replace(/[\.,]/g, '');
+    const month = MONTH_NAME_MAP[cleanedMonth];
+    if (!month) return null;
+
+    const yearMatch = line.match(/\b(\d{2,4})\b(?!.*\b\d{2,4}\b)/);
+    const normalizedYear = normalizeYear(yearMatch?.[1], year);
+    if (normalizedYear !== year) return null;
+
+    const day = Number(dayStr);
+    const parsedDate = new Date(normalizedYear, month - 1, day);
+    if (parsedDate.getFullYear() !== normalizedYear || parsedDate.getMonth() !== month - 1 || parsedDate.getDate() !== day) {
+      return null;
+    }
+
+    const label = line.replace(textMatch[0], '').replace(yearMatch?.[0] || '', '').replace(/^[\s:;\-–,\.]+/, '').trim();
+    return {
+      date: `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}-${normalizedYear}`,
+      label,
+    };
+  }
+
+  return null;
 }
 
 function generateWorkPattern(year) {
@@ -187,17 +229,15 @@ function isWeekend(dateKey) {
   return dayOfWeek === 0 || dayOfWeek === 6;
 }
 
-function isOfficialHoliday(dateKey, year) {
+function isOfficialHoliday(dateKey, holidays = []) {
   const [y, month, day] = dateKey.split('-');
   const displayDate = `${day}-${month}-${y}`;
-  const holidays = getOfficialHolidays(Number(y));
   return holidays.some(h => h.date === displayDate);
 }
 
-function getHolidayName(dateKey) {
+function getHolidayName(dateKey, holidays = []) {
   const [y, month, day] = dateKey.split('-');
   const displayDate = `${day}-${month}-${y}`;
-  const holidays = getOfficialHolidays(Number(y));
   const holiday = holidays.find(h => h.date === displayDate);
   return holiday ? holiday.label : null;
 }
@@ -217,8 +257,37 @@ function calculateFRPeriod(dateStr) {
   } else if (monthNum === 12 || monthNum === 1 || monthNum === 2) {
     return { period: 'Des-Gen-Feb', deadline: '15 octubre' };
   }
-  
+
   return { period: '-', deadline: '-' };
+}
+
+function parseHolidayText(text, year) {
+  if (!text) return [];
+
+  const holidays = [];
+  const seenDates = new Set();
+
+  text.split(/\n+/).forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return;
+
+    const parsed = extractDateFromLine(line, year);
+    if (!parsed) return;
+
+    const { date, label } = parsed;
+    if (seenDates.has(date)) return;
+
+    const { period, deadline } = calculateFRPeriod(date);
+    holidays.push({
+      date,
+      label: label || 'Festiu oficial',
+      period,
+      deadline,
+    });
+    seenDates.add(date);
+  });
+
+  return holidays.sort((a, b) => new Date(parseDate(a.date)) - new Date(parseDate(b.date)));
 }
 
 function dateInputToDisplay(dateInput) {
@@ -279,9 +348,10 @@ export default function Planning() {
   const [showSolicitud, setShowSolicitud] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [holidayText, setHolidayText] = useState('');
 
   const baseWorkPattern = useMemo(() => generateWorkPattern(year), [year]);
-  const officialHolidays = useMemo(() => getFRHolidays(year), [year]);
+  const officialHolidays = useMemo(() => parseHolidayText(holidayText, year), [holidayText, year]);
   const officialFRs = useMemo(() => {
     const allowedDays = new Set([1, 5, 6]); // dilluns, divendres, dissabte
 
@@ -299,6 +369,14 @@ export default function Planning() {
       .filter(Boolean)
       .sort((a, b) => new Date(a.dateKey) - new Date(b.dateKey));
   }, [officialHolidays, baseWorkPattern, year]);
+
+  useEffect(() => {
+    setHolidayText(readHolidayText(year));
+  }, [year]);
+
+  useEffect(() => {
+    writeHolidayText(year, holidayText);
+  }, [holidayText, year]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1195,8 +1273,8 @@ export default function Planning() {
                           entry?.frId === assigningFR.id;
                         
                         const weekend = isWeekend(dateKey);
-                        const holiday = isOfficialHoliday(dateKey, year);
-                        const holidayName = getHolidayName(dateKey);
+                        const holiday = isOfficialHoliday(dateKey, officialHolidays);
+                        const holidayName = getHolidayName(dateKey, officialHolidays);
                         const date = new Date(year, mi, day);
                         const dayOfWeek = date.getDay();
 
@@ -1381,6 +1459,48 @@ export default function Planning() {
             </div>
           </div>
         )}
+
+        <div className="bg-white rounded-lg shadow p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-lg text-red-800">📌 Festius oficials {year}</h3>
+            <span className="text-xs text-gray-600">{officialHolidays.length} detectats</span>
+          </div>
+
+          <p className="text-sm text-gray-600 mb-2">
+            Enganxa aquí el llistat oficial de festius ({year}) en format lliure. Accepta dates com
+            <strong className="ml-1">01/01/{year}</strong>, <strong>{`1-1-${year}`}</strong> o
+            <strong className="ml-1">1 de gener {year}</strong>. Només es marcaran al calendari les dates detectades (incloent diumenges si hi apareixen al llistat).
+          </p>
+
+          <textarea
+            value={holidayText}
+            onChange={(e) => setHolidayText(e.target.value)}
+            rows={6}
+            className="w-full border rounded p-2 text-sm font-mono"
+            placeholder={`01/01/${year} Any Nou\n06/01/${year} Reis\n15/08/${year} Assumpció`}
+          />
+
+          <div className="flex items-center justify-between text-xs text-gray-600 mt-2">
+            <span>Detectats {officialHolidays.length} festius. Els diumenges només es marquen si són al llistat.</span>
+            <button
+              onClick={() => setHolidayText('')}
+              className="text-red-600 hover:text-red-800 font-bold"
+            >
+              Buidar
+            </button>
+          </div>
+
+          {officialHolidays.length > 0 && (
+            <ul className="mt-3 space-y-1 max-h-32 overflow-y-auto text-xs text-gray-800">
+              {officialHolidays.map((holiday) => (
+                <li key={holiday.date} className="flex items-center gap-2">
+                  <span className="font-mono bg-gray-100 px-2 py-1 rounded">{holiday.date}</span>
+                  <span className="flex-1">{holiday.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
           
