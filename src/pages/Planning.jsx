@@ -512,6 +512,10 @@ export default function Planning() {
   }, [holidayText, year]);
 
   useEffect(() => {
+    if (!baseWorkPattern || Object.keys(baseWorkPattern).length === 0) {
+      return;
+    }
+
     const loadData = async () => {
       if (year < MIN_YEAR) {
         setYear(MIN_YEAR);
