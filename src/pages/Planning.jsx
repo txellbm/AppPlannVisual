@@ -362,6 +362,14 @@ export default function Planning() {
   const [holidayText, setHolidayText] = useState('');
   const [deletingAssignment, setDeletingAssignment] = useState(false);
 
+  const holidayPrompt = useMemo(
+    () =>
+      `Genera'm la llista oficial de festius laborals de Catalunya i Barcelona per a l'any ${
+        year + 1
+      } en format només de dates numèriques (dd-mm-aaaa), una per línia, sense numerar i sense textos extres.\nInclou:\n— Festius estatals\n— Festius autonòmics de Catalunya\n— Festius locals de Barcelona\nNo incloguis festius compensatoris ni explicacions.`,
+    [year]
+  );
+
   const baseWorkPattern = useMemo(() => generateWorkPattern(year), [year]);
   const officialHolidays = useMemo(() => parseHolidayText(holidayText, year), [holidayText, year]);
   const officialFRs = useMemo(() => {
@@ -400,6 +408,14 @@ export default function Planning() {
     }
 
     saveCalendar(newCalendar);
+  };
+
+  const handleCopyHolidayPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(holidayPrompt);
+    } catch (error) {
+      console.error('No s\'ha pogut copiar el prompt de festius:', error);
+    }
   };
 
   useEffect(() => {
@@ -1511,12 +1527,22 @@ export default function Planning() {
 
           <div className="flex items-center justify-between text-xs text-gray-600 mt-2">
             <span>Detectats {officialHolidays.length} festius. Els diumenges només es marquen si són al llistat.</span>
-            <button
-              onClick={() => setHolidayText('')}
-              className="text-red-600 hover:text-red-800 font-bold"
-            >
-              Buidar
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleCopyHolidayPrompt}
+                className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-semibold"
+              >
+                <Copy className="w-4 h-4" />
+                Copiar prompt per obtenir festius
+              </button>
+
+              <button
+                onClick={() => setHolidayText('')}
+                className="text-red-600 hover:text-red-800 font-bold"
+              >
+                Buidar
+              </button>
+            </div>
           </div>
 
           {officialHolidays.length > 0 && (
